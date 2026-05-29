@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+    <copy file="FuzzyVeins.net.xml"/>
+    <copy file="FuzzyVeins_small_Nv50.rou.xml"/>
+    <copy file="FuzzyVeins_ch52_Nv50.sumo.cfg" type="config"/>
+</launch>
