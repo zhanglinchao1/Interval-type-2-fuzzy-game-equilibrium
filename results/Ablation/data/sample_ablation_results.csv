@@ -1,0 +1,5 @@
+model,R_owa_mean,R_owa_std,delay_rate_mean,delay_rate_std,energy_eff_mean,energy_eff_std,fairness_index_mean,fairness_index_std
+full,0.847,0.052,0.923,0.031,0.764,0.078,0.891,0.041
+no_IT2,0.782,0.067,0.871,0.048,0.721,0.089,0.843,0.059
+no_Choquet,0.712,0.091,0.889,0.042,0.693,0.107,0.814,0.076
+no_RL,0.819,0.058,0.854,0.063,0.738,0.072,0.869,0.053

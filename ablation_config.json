@@ -1,0 +1,135 @@
+{
+  "experiment_name": "Ablation Study for IT2/Choquet/OWA-RL Module Comparison",
+  "description": "Comprehensive ablation study to evaluate the individual contributions of IT2-Sigmoid, Choquet-OWA, and OWA-RL modules to overall system performance",
+  "version": "1.0.0",
+  "author": "University of Electronic Science and Technology of China",
+  "date": "2024-12-30",
+  
+  "experiment_config": {
+    "simulation_time": 300,
+    "num_runs": 5,
+    "sampling_interval": 1.0,
+    "output_directory": "results/Ablation/",
+    "enable_detailed_logging": true,
+    "enable_real_time_export": false
+  },
+  
+  "model_configurations": {
+    "full": {
+      "name": "完整模型",
+      "description": "包含IT2-Sigmoid + 双阶Choquet-OWA + OWA-RL的完整模型",
+      "enable_IT2": true,
+      "enable_Choquet": true,
+      "enable_OWARL": true,
+      "color": "#1f77b4",
+      "marker": "o",
+      "linestyle": "-"
+    },
+    "no_IT2": {
+      "name": "无IT2模块",
+      "description": "去掉IT2-Sigmoid信任评估模块后的模型",
+      "enable_IT2": false,
+      "enable_Choquet": true,
+      "enable_OWARL": true,
+      "color": "#ff7f0e",
+      "marker": "s",
+      "linestyle": "--"
+    },
+    "no_Choquet": {
+      "name": "无Choquet-OWA模块",
+      "description": "去掉双阶Choquet-OWA聚合模块后的模型",
+      "enable_IT2": true,
+      "enable_Choquet": false,
+      "enable_OWARL": true,
+      "color": "#2ca02c",
+      "marker": "^",
+      "linestyle": "-."
+    },
+    "no_RL": {
+      "name": "无OWA-RL模块",
+      "description": "去掉OWA-RL自适应权重学习模块后的模型",
+      "enable_IT2": true,
+      "enable_Choquet": true,
+      "enable_OWARL": false,
+      "color": "#d62728",
+      "marker": "D",
+      "linestyle": ":"
+    }
+  },
+  
+  "kpi_definitions": {
+    "R_owa": {
+      "name": "综合收益",
+      "description": "基于OWA聚合的综合性能收益指标",
+      "unit": "normalized",
+      "target": "maximize",
+      "threshold": 0.8
+    },
+    "delay_rate": {
+      "name": "时延满足率",
+      "description": "满足时延需求的任务比例",
+      "unit": "percentage",
+      "target": "maximize",
+      "threshold": 0.9
+    },
+    "energy_eff": {
+      "name": "能耗效率",
+      "description": "单位资源下完成任务数的能耗效率",
+      "unit": "tasks/energy",
+      "target": "maximize",
+      "threshold": 0.7
+    },
+    "fairness_index": {
+      "name": "公平性指标",
+      "description": "基于Jain's fairness index的公平性度量",
+      "unit": "index",
+      "target": "maximize",
+      "threshold": 0.85
+    }
+  },
+  
+  "simulation_parameters": {
+    "num_nodes": 30,
+    "trust_update_interval": 1.0,
+    "qos_update_interval": 1.0,
+    "game_update_interval": 1.0,
+    "decision_interval": 1.0,
+    "beacon_interval": 1.0
+  },
+  
+  "output_config": {
+    "export_formats": ["csv", "json"],
+    "generate_plots": true,
+    "plot_formats": ["png", "pdf"],
+    "radar_chart": {
+      "normalized": true,
+      "show_grid": true,
+      "alpha": 0.15
+    },
+    "bar_chart": {
+      "show_values": true,
+      "error_bars": true
+    }
+  },
+  
+  "quality_assurance": {
+    "minimum_samples": 100,
+    "convergence_check": true,
+    "statistical_significance": 0.05,
+    "confidence_interval": 0.95
+  },
+  
+  "expected_outcomes": {
+    "full_model": {
+      "R_owa_expected": 0.85,
+      "delay_rate_expected": 0.92,
+      "energy_eff_expected": 0.88,
+      "fairness_expected": 0.95
+    },
+    "performance_degradation": {
+      "no_IT2": "预期信任评估准确度下降5-10%",
+      "no_Choquet": "预期决策质量下降8-15%",
+      "no_RL": "预期适应性能力下降10-20%"
+    }
+  }
+}

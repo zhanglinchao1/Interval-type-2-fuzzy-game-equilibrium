@@ -1,0 +1,33 @@
+# Generated simulation outputs
+logs/
+*.log
+*.vec
+*.sca
+*.vci
+results/collected_data/
+results/chapter52/
+results/chapter52_*/
+results/*/logs/
+results/*/results/
+results/Ablation/logs/
+results/Ablation/results/
+results/Vehicle Mixing Strategy/data/*.csv
+results/OWAL-RL/data/*.csv
+
+# Generated figures and scratch output
+scripts/result/
+scripts/hebing_result_strong/
+
+# Local caches
+.codegraph/
+.agents/
+.claude/
+.codex/
+code/.agents/
+code/.claude/
+code/.codex/
+**/__pycache__/
+**/*.pyc
+
+# Editor / shell noise
+.qtenvrc

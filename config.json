@@ -1,0 +1,188 @@
+{
+    "IT2Sigmoid": {
+        "theta_lower": 0.45,
+        "theta_upper": 0.55,
+        "k_lower": 8.0,
+        "k_upper": 12.0,
+        "alpha": [0.22, 0.15, 0.14, 0.13, 0.12, 0.12, 0.12],
+        "epsilon_KM": 1e-6,
+        "max_KM_iterations": 100
+    },
+    "ChannelQuality": {
+        "gamma": 2.0,
+        "sigma": 0.3,
+        "j1_base": 5.0,
+        "j2_base": 25.0,
+        "l1_base": 0.01,
+        "l2_base": 0.08,
+        "rho_shrink_coeff": 1.0,
+        "beta_t": 0.5,
+        "beta_j": 0.3,
+        "beta_l": 0.2
+    },
+    "ResourceManager": {
+        "kappa_c": 10.0,
+        "kappa_b": 9.0,
+        "lambda_c": 0.5,
+        "lambda_b": 0.3,
+        "lambda_e": 0.2,
+        "theta_c": 0.6,
+        "theta_b": 0.4,
+        "eta": 0.7,
+        "prediction_window_k": 5,
+        "e_min": 0.05,
+        "e_mid": 0.5,
+        "e_max": 1.0,
+        "choquet_enabled": true,
+        "nu_choquet": [0.4, 0.3, 0.3]
+    },
+    "OWARLAgent": {
+        "w_init": [0.25, 0.25, 0.25, 0.25],
+        "w_prior": [0.3, 0.3, 0.2, 0.2],
+        "eta_learning": 0.01,
+        "lambda_regularization": 0.1,
+        "max_steps": 1000,
+        "potential_game_alpha": 0.8,
+        "potential_game_beta": 0.2,
+        "convergence_threshold": 1e-6,
+        "history_window_size": 20,
+        "weight_tracking": {
+            "enabled": true,
+            "collection_interval": 1.0,
+            "output_directory": "./results/OWAL-RL/data/",
+            "max_window_size": 1000,
+            "enable_real_time_export": false,
+            "collect_detailed_stats": true
+        }
+    },
+    "GameManager": {
+        "x_j_init": [0.5, 0.3, 0.2],
+        "delta_replicator": 0.05,
+        "noise_variance": 0.01,
+        "max_step_size": 0.1,
+        "alpha_rsu": 0.1,
+        "epsilon_rsu": 0.1,
+        "fast_timescale_dt": 0.1,
+        "slow_timescale_blocks": 10,
+        "gamma_discount": 0.95
+    },
+    "FuzzyInferenceEngine": {
+        "input_vars": ["mu_trust", "mu_delay", "mu_resource", "rho", "F_c", "F_b", "F_e"],
+        "membership_params": {
+            "trust": {
+                "low": {"type": "sigmoid", "theta": 0.3, "k": -10.0},
+                "medium": {"type": "gaussian", "mean": 0.5, "std": 0.15},
+                "high": {"type": "sigmoid", "theta": 0.7, "k": 10.0}
+            },
+            "channel": {
+                "low": {"type": "sigmoid", "theta": 0.3, "k": -8.0},
+                "medium": {"type": "gaussian", "mean": 0.5, "std": 0.2},
+                "high": {"type": "sigmoid", "theta": 0.7, "k": 8.0}
+            },
+            "resource": {
+                "low": {"type": "sigmoid", "theta": 0.25, "k": -12.0},
+                "medium": {"type": "gaussian", "mean": 0.5, "std": 0.18},
+                "high": {"type": "sigmoid", "theta": 0.75, "k": 12.0}
+            }
+        },
+        "rules": [
+            {"id": "R1", "name": "高信誉协同策略", "condition": "trust=high AND channel=high AND resource=high", "conclusion": "strategy=SC", "weight": 0.25, "priority": 1},
+            {"id": "R2", "name": "网络拥堵保护策略", "condition": "trust=high AND channel=low AND resource=medium", "conclusion": "strategy=SP", "weight": 0.20, "priority": 2},
+            {"id": "R3", "name": "资源受限防御策略", "condition": "trust=medium AND resource=low", "conclusion": "strategy=DC", "weight": 0.18, "priority": 3},
+            {"id": "R4", "name": "低信誉防御策略", "condition": "trust=low", "conclusion": "strategy=DP", "weight": 0.15, "priority": 4},
+            {"id": "R5", "name": "机会主义策略", "condition": "trust=low AND channel=high AND resource=high", "conclusion": "strategy=SP", "weight": 0.12, "priority": 5},
+            {"id": "R6", "name": "自适应平衡策略", "condition": "channel=medium AND resource=medium", "conclusion": "strategy=SC", "weight": 0.08, "priority": 6},
+            {"id": "R7", "name": "混合均衡策略", "condition": "trust=medium AND (channel=high OR resource=high)", "conclusion": "strategy=DC", "weight": 0.02, "priority": 7}
+        ],
+        "defuzz_method": "centroid",
+        "aggregation_method": "mamdani",
+        "implication_method": "min",
+        "dao_voting_threshold": 0.6,
+        "dao_weight_update_rate": 0.05,
+        "dao_consensus_threshold": 0.75,
+        "lyapunov_params": {
+            "window_size": 50,
+            "stability_threshold": 1e-4,
+            "potential_function_alpha": 0.8,
+            "potential_function_beta": 0.2,
+            "convergence_tolerance": 1e-6,
+            "max_iterations": 1000,
+            "gradient_step_size": 0.01,
+            "momentum_coefficient": 0.9
+        },
+        "timescale_params": {
+            "fast_timescale_steps": 10,
+            "slow_timescale_steps": 100,
+            "fast_dt": 0.1,
+            "slow_dt": 1.0,
+            "separation_ratio": 10.0
+        },
+        "prediction_modulation": {
+            "lambda_c": 0.3,
+            "lambda_b": 0.4,
+            "lambda_e": 0.3,
+            "beta_softmin": 2.0,
+            "enable_prediction_adjustment": true
+        },
+        "performance_monitoring": {
+      "enable_rule_frequency_tracking": true,
+      "enable_strategy_entropy_calculation": true,
+      "enable_convergence_monitoring": true,
+      "monitoring_window_size": 100
+    },
+        "rule_weight_optimization": {
+            "enabled": true,
+            "optimization_frequency": 50,
+            "adaptive_frequency": 100,
+            "adjustment_rate": 0.1,
+            "min_history_size": 10,
+            "performance_weights": {
+                "accuracy": 0.5,
+                "stability": 0.3,
+                "efficiency": 0.2
+            },
+            "adaptive_adjustment": {
+                "base_intensity": 0.05,
+                "performance_decline_intensity": 0.15,
+                "performance_improve_intensity": 0.02,
+                "performance_decline_threshold": 0.9,
+                "performance_improve_threshold": 1.1
+            }
+        }
+  },
+  
+  "DynamicParameterOptimizer": {
+    "resource_prediction": {
+      "exponential_alpha": 0.3,
+      "exponential_beta": 0.2,
+      "exponential_gamma": 0.1,
+      "arima_p": 2,
+      "arima_d": 1,
+      "arima_q": 2,
+      "prediction_window": 10,
+      "ensemble_threshold": 0.8
+    },
+    "network_quality": {
+      "measurement_interval_ms": 100,
+      "history_window_size": 50,
+      "anomaly_threshold": 2.0,
+      "latency_threshold_ms": 100.0,
+      "jitter_threshold_ms": 20.0,
+      "packet_loss_threshold": 0.05
+    },
+    "reputation": {
+      "time_decay_factor": 0.95,
+      "max_history_records": 1000,
+      "anomaly_threshold": 2.5,
+      "trend_smoothing_factor": 0.2
+    },
+    "convergence": {
+      "convergence_threshold": 1e-4,
+      "min_convergence_steps": 10,
+      "stability_threshold": 0.95,
+      "learning_rate_min": 0.001,
+      "learning_rate_max": 0.1,
+      "convergence_window": 20
+    }
+  }
+}

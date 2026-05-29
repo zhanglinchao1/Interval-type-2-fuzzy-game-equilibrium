@@ -1,0 +1,30 @@
+# Makefile for Ablation Framework Test
+# 
+# This makefile compiles the test program for the ablation study framework
+
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra -I../../src
+
+# Source files  
+ABLATION_DIR = ../../src/veins/modules/application/fuzzytrust/Ablation
+SOURCES = test_ablation_framework.cpp \
+          $(ABLATION_DIR)/AblationTestManager.cc \
+          $(ABLATION_DIR)/KPICalculator.cc \
+          $(ABLATION_DIR)/AblationDataCollector.cc
+
+# Target
+TARGET = test_ablation_framework
+
+# Build target
+$(TARGET): $(SOURCES)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SOURCES)
+
+# Clean target
+clean:
+	rm -f $(TARGET)
+
+# Test target
+test: $(TARGET)
+	./$(TARGET)
+
+.PHONY: clean test
