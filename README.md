@@ -1,7 +1,6 @@
-# FuzzyVeins Reproducibility Package
+# Interval Type-2 Fuzzy Game Equilibrium for Blockchain-Governed Collaborative Communication among Physical Agents
 
-This repository packages the code and reproducibility assets for the FuzzyVeins
-paper/thesis experiments.
+This repository packages the code and reproducibility assets for the FuzzyVeins experiments.
 
 ## What this repo contains
 
@@ -25,18 +24,10 @@ veins/examples/FuzzyVeins
 The scripts and test harnesses rely on the Veins relative path layout, so the
 external Veins source tree must still be available.
 
-Typical commands:
+Typical commands: 
 
 ```bash
 ./run -u Cmdenv -c Chapter52_M1_Smoke
 ./run -u Cmdenv -c FuzzyVeins
 bash scripts/run_strong_all.sh --post-only
 ```
-
-## Reproducibility notes
-
-- Large logs, raw simulation outputs, cache directories, and intermediate
-  figures are intentionally excluded.
-- The `doc/` folder contains English documentation and paper drafts.
-- If you want to rebuild the paper figures, run the aggregation and plotting
-  scripts under `scripts/`.
