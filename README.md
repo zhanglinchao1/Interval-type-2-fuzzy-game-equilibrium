@@ -1,4 +1,4 @@
-# Interval Type-2 Fuzzy Game Equilibrium for Blockchain-Governed Physical-Agent Communication
+# Interval Type-2 Fuzzy Game Equilibrium for Blockchain-Governed Physical-Agent Collaborative Communication
 
 This repository packages the code and reproducibility assets for the FuzzyVeins experiments.
 
