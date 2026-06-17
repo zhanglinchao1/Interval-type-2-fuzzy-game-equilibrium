@@ -1,4 +1,4 @@
-# Learning Robust α-Fuzzy Nash Equilibria for Blockchain-Governed Vehicular Games
+# Computing Robust α-Fuzzy Nash Equilibria in Interval Type-2 Fuzzy Games
 
 
 This repository packages the code and reproducibility assets for the FuzzyVeins experiments.
