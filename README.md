@@ -1,4 +1,4 @@
-# Learning Robust (\alpha)-Fuzzy Nash Equilibria for Blockchain-Governed Vehicular Games
+# Learning Robust α-Fuzzy Nash Equilibria for Blockchain-Governed Vehicular Games
 
 
 This repository packages the code and reproducibility assets for the FuzzyVeins experiments.
