@@ -10,7 +10,7 @@ This repository packages the code and reproducibility assets for the FuzzyVeins 
   `FuzzyVeins*.launchd.xml`, `config.json`, `ablation_config.json`,
   `config.xml`, and `antenna.xml`.
 - Experiment automation and plotting scripts under `scripts/`.
-- MATLAB validation and theory checks under `code/matlab_sim/`.
+- MATLAB validation and theory checks under `matlab_sim/`.
 - Minimal auxiliary test code under `results/`.
 - All non-root Markdown documentation has been moved into `doc/`.
 
