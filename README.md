@@ -1,4 +1,5 @@
-# Interval Type-2 Fuzzy Game Equilibrium for Blockchain-Governed Physical-Agent Collaborative Communication
+# Learning Robust (\alpha)-Fuzzy Nash Equilibria for Blockchain-Governed Vehicular Games
+
 
 This repository packages the code and reproducibility assets for the FuzzyVeins experiments.
 
