@@ -1,0 +1,2 @@
+L_sigma_local,c_omega_local,LambdaMaxTangentLocal,FastMarginLocal,ReducedResidualInf,FastBasinSpread,NumFastInitializations,GovernanceBasinSpread,NumGovernanceInitializations,FixedPointIterations,GlobalCertificate,CertifiedEpsilonGThreshold
+0.131372679422577,0.678612899448333,-0.0864608266081845,0.0864608266081845,3.8441472227646e-12,5.91630535910211e-08,5,1.70646475432343e-11,6,12,0,NaN

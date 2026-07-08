@@ -14,6 +14,7 @@
 % 输出:
 %   image/fig5_1_residual_convergence.png  - 残差几何衰减 + (4-25) 理论包络
 %   image/fig5_2_payoff_convergence.png    - 平均收益, 体现 Proposed > Fixed-W
+%   image/fig5_1_convergence_dual_axis.png - 残差/收益双 y 轴融合图
 %   image/fig5_3_strategy_evolution.png    - Proposed 策略概率演化
 %   image/fig5_4_contraction_scalability.png - (a) (λ,β) 热力图; (b) R vs N 扩展性
 %   table/table5_1_convergence.csv         - 含 q_hat / q_th / D_theta 共 8 列
@@ -23,6 +24,8 @@ clear; clc; close all;
 %% 全局字体设置
 set(0, 'DefaultAxesFontName', 'Times New Roman');
 set(0, 'DefaultTextFontName', 'Times New Roman');
+set(0, 'DefaultAxesFontSize', 12);
+set(0, 'DefaultTextFontSize', 12);
 
 %% 路径与输出目录
 script_dir = fileparts(mfilename('fullpath'));
@@ -102,7 +105,7 @@ sat_ok = check_fou_saturation(params_base, delta, ...
 fprintf('[饱和检查] 均匀 FOU 沿迭代轨迹不饱和 (μ∈[δ,1-δ]): %s\n', ...
     pass_label(sat_ok));
 
-lambda_default = params_base.lambda;   % 0.10
+lambda_default = params_base.lambda;   % 0.20 (认证窗内默认工作点)
 beta_default   = params_base.beta;     % 0.3
 kappa_fixed    = D_fixed    / (2 * lambda_default);
 kappa_proposed = D_proposed / (2 * lambda_default);
@@ -148,7 +151,7 @@ plot_methods_curve = [2, 3];   % 仅 Fixed-weight IT2, Proposed IT2-W-FBRI
 
 %% Fig 5-1: Strategy residual geometric convergence (Fixed-W vs Proposed)
 figure('Name', 'W-FBRI Strategy Residual Geometric Convergence', ...
-    'Position', [100,100,750,520]);
+    'Position', [100,100,480,330]);
 hold on;
 handles = gobjects(length(plot_methods_curve), 1);
 for k = 1:length(plot_methods_curve)
@@ -165,10 +168,10 @@ hold off;
 set(gca, 'YScale', 'log');
 xlabel('Iteration r', 'FontSize', 12);
 ylabel('Strategy Residual e_\pi^{(r)}', 'FontSize', 12);
-title(sprintf('W-FBRI Strategy Residual Geometric Convergence (N=%d, \\lambda=%.2f, \\beta=%.1f)', ...
-    N_plot, lambda_default, beta_default), 'FontSize', 13);
+title('(a) Strategy residual', 'FontSize', 13);
 legend(handles, methods(plot_methods_curve), 'Location', 'northeast', 'FontSize', 11);
 grid on;
+apply_fig5_publication_style(gcf);
 saveas(gcf, fullfile(img_dir, 'fig5_1_residual_convergence.png'));
 % 矢量 PDF: exportgraphics 默认按内容边界裁剪, 无整页留白边框
 exportgraphics(gcf, fullfile(img_dir, 'fig5_1_residual_convergence.pdf'), ...
@@ -177,7 +180,7 @@ fprintf('\n[图] %s\n', fullfile('image', 'fig5_1_residual_convergence.png'));
 
 %% Fig 5-2: Average crystallized payoff convergence (Proposed > Fixed-W via W mechanism)
 figure('Name', 'Average Crystallized Payoff Convergence', ...
-    'Position', [150,100,750,520]);
+    'Position', [150,100,480,330]);
 hold on;
 handles2 = gobjects(length(plot_methods_curve), 1);
 for k = 1:length(plot_methods_curve)
@@ -193,13 +196,68 @@ end
 hold off;
 xlabel('Iteration r', 'FontSize', 12);
 ylabel('Average Crystallized Payoff U^{(r)}_{avg}', 'FontSize', 12);
-title(sprintf('Average Crystallized Payoff Convergence (N=%d)', N_plot), 'FontSize', 13);
+title('(b) Average payoff', 'FontSize', 13);
 legend(handles2, methods(plot_methods_curve), 'Location', 'southeast', 'FontSize', 11);
 grid on;
+apply_fig5_publication_style(gcf);
 saveas(gcf, fullfile(img_dir, 'fig5_2_payoff_convergence.png'));
 exportgraphics(gcf, fullfile(img_dir, 'fig5_2_payoff_convergence.pdf'), ...
     'ContentType', 'vector', 'BackgroundColor', 'white');
 fprintf('[图] %s\n', fullfile('image', 'fig5_2_payoff_convergence.png'));
+
+%% Fig 5-1 merged: residual and payoff in one dual-axis coordinate system
+figure('Name', 'W-FBRI Convergence: Residual and Payoff', ...
+    'Position', [150,100,520,360]);
+yyaxis left;
+hold on;
+handles_res = gobjects(length(plot_methods_curve), 1);
+for k = 1:length(plot_methods_curve)
+    m = plot_methods_curve(k);
+    iters = 1:length(results{m}.residual);
+    mark_step = max(1, floor(length(iters)/10));
+    handles_res(k) = plot(iters, results{m}.residual, ...
+        'Color', colors{m}, 'LineStyle', line_styles{m}, ...
+        'LineWidth', linewidths(m), ...
+        'Marker', markers{m}, 'MarkerIndices', 1:mark_step:length(iters), ...
+        'MarkerSize', marker_sizes(m), 'MarkerFaceColor', colors{m});
+end
+hold off;
+set(gca, 'YScale', 'log');
+ylabel('Strategy Residual e_\pi^{(r)}', 'FontSize', 12);
+
+yyaxis right;
+hold on;
+handles_pay = gobjects(length(plot_methods_curve), 1);
+for k = 1:length(plot_methods_curve)
+    m = plot_methods_curve(k);
+    iters = 1:length(results{m}.avg_payoff);
+    mark_step = max(1, floor(length(iters)/10));
+    handles_pay(k) = plot(iters, results{m}.avg_payoff, ...
+        'Color', colors{m}, 'LineStyle', ':', ...
+        'LineWidth', linewidths(m), ...
+        'Marker', markers{m}, 'MarkerIndices', 1:mark_step:length(iters), ...
+        'MarkerSize', marker_sizes(m), 'MarkerFaceColor', 'w');
+end
+hold off;
+ylabel('Average Payoff U^{(r)}_{avg}', 'FontSize', 12);
+
+xlabel('Iteration r', 'FontSize', 12);
+title('Convergence residual and payoff', 'FontSize', 13);
+lgd = legend([handles_res; handles_pay], ...
+    [strcat(methods(plot_methods_curve), ' residual'), ...
+     strcat(methods(plot_methods_curve), ' payoff')], ...
+    'Location', 'southwest', 'FontSize', 9);
+grid on;
+apply_fig5_publication_style(gcf);
+yyaxis left;
+set(gca, 'YColor', 'k');
+yyaxis right;
+set(gca, 'YColor', 'k');
+lgd.FontSize = 9;
+saveas(gcf, fullfile(img_dir, 'fig5_1_convergence_dual_axis.png'));
+exportgraphics(gcf, fullfile(img_dir, 'fig5_1_convergence_dual_axis.pdf'), ...
+    'ContentType', 'vector', 'BackgroundColor', 'white');
+fprintf('[图] %s\n', fullfile('image', 'fig5_1_convergence_dual_axis.png'));
 
 %% Fig 5-3: Strategy probability evolution of four classes (Proposed method, idx=3)
 figure('Name', 'Strategy Probability Evolution', ...
@@ -217,16 +275,17 @@ ylabel('Strategy Probability', 'FontSize', 12);
 title(sprintf('Strategy Probability Evolution (Proposed, N=%d)', N_plot), 'FontSize', 13);
 legend(strategy_names, 'Location', 'east', 'FontSize', 11);
 grid on;
+apply_fig5_publication_style(gcf);
 saveas(gcf, fullfile(img_dir, 'fig5_3_strategy_evolution.png'));
 exportgraphics(gcf, fullfile(img_dir, 'fig5_3_strategy_evolution.pdf'), ...
     'ContentType', 'vector', 'BackgroundColor', 'white');
 fprintf('[图] %s\n', fullfile('image', 'fig5_3_strategy_evolution.png'));
 
-%% 5) (λ, β) 扫描: 验证压缩条件 κ=D(θ)/(2λ)<1 的工程边界与 q_hat 网格
-% λ 网格覆盖认证窗口 (D/2, ε_acc/ln|S|] = (0.077, 0.108] 的两侧与内部:
-%   0.05 → 收缩侧认证失败 (κ>1); 0.08 → 窗口内边界点; 0.10 → 默认;
-%   0.20 → 收缩认证成立但偏差预算超标 (λ·ln|S| > ε_acc)
-lambda_list = [0.05, 0.08, 0.10, 0.20];
+%% 5) (λ, β) 扫描: 验证压缩条件 κ=D_ν(θ)/(2λ)<1 的工程边界与 q_hat 网格
+% Route C 凹聚合下结构模数 D_ν 增大, 认证窗 (D_ν/2, ε_acc/ln|S|] 右移:
+%   0.10 → 收缩侧认证失败 (κ>1, 曲率代价); 0.15 → 窗口内; 0.20 → 默认工作点;
+%   0.30 → 收缩认证成立但偏差预算临界 (λ·ln|S| ≈ ε_acc)
+lambda_list = [0.10, 0.15, 0.20, 0.30];
 beta_list   = [0.10, 0.30, 0.50];
 q_hat_LB    = NaN(length(beta_list), length(lambda_list));
 q_th_LB     = NaN(length(beta_list), length(lambda_list));
@@ -255,10 +314,10 @@ end
 
 %% Fig 5-4: (a) (lambda, beta) contraction-rate heatmap; (b) convergence rounds R vs N
 figure('Name', 'Contraction Condition and Scalability', ...
-    'Position', [250,100,1100,460]);
+    'Position', [250,40,640,880]);
 
 % (a) (lambda, beta) contraction-rate heatmap
-subplot(1, 2, 1);
+subplot(2, 1, 1);
 imagesc(q_hat_LB);
 colormap(flipud(parula));
 caxis([0, 1]);
@@ -283,7 +342,7 @@ for ib = 1:length(beta_list)
 end
 
 % (b) 收敛轮数 R 关于 N 的扩展性 (柱状图, 避免 Fixed/Proposed R 相同时的重合)
-subplot(1, 2, 2);
+subplot(2, 1, 2);
 R_grid = zeros(length(N_list), num_methods);
 for n_idx = 1:length(N_list)
     for m = 1:num_methods
@@ -313,6 +372,7 @@ for n_idx = 1:length(N_list)
     end
 end
 
+apply_fig5_publication_style(gcf);
 saveas(gcf, fullfile(img_dir, 'fig5_4_contraction_scalability.png'));
 exportgraphics(gcf, fullfile(img_dir, 'fig5_4_contraction_scalability.pdf'), ...
     'ContentType', 'vector', 'BackgroundColor', 'white');
@@ -323,6 +383,8 @@ sync_named_figures(img_dir, fullfile(script_dir, '..', 'Latex'), {
     'fig5_1_residual_convergence.pdf';
     'fig5_2_payoff_convergence.png';
     'fig5_2_payoff_convergence.pdf';
+    'fig5_1_convergence_dual_axis.png';
+    'fig5_1_convergence_dual_axis.pdf';
     'fig5_3_strategy_evolution.png';
     'fig5_3_strategy_evolution.pdf';
     'fig5_4_contraction_scalability.png';
@@ -334,7 +396,7 @@ sync_named_figures(img_dir, fullfile(script_dir, '..', 'Latex'), {
 %   偏差侧认证: λ ≤ ε_acc / C_λ, C_λ ≤ ln|S| (Remark 3 精度预算)
 %   取 (λ,β) 扫描中 β=默认值 0.3 的行, 对照"认证状态"与"实测 q_hat",
 %   量化认证窗口外的实际行为 (认证保守度 / 真实失败边界)。
-eps_acc   = 0.15;                              % 与论文 Remark 3 一致
+eps_acc   = 0.30;                              % 与论文 Remark 3 一致 (Route C 凹聚合放宽精度预算)
 bias_coef = log(params_base.num_strategies);   % C_λ 上界 = ln|S| = ln4
 beta_row  = find(abs(beta_list - beta_default) < 1e-9, 1);
 
@@ -404,7 +466,7 @@ writetable(T, csv_path);
 fprintf('\n[表] %s\n', fullfile('table', 'table5_1_convergence.csv'));
 
 %% 7) E7: Greedy 收益反超的鲁棒性代价量化 (N=50)
-%   Greedy 终态 Ū=0.8325 高于 Proposed 0.7379, 但该优势以三重代价换取:
+%   Greedy 终态 Ū=0.9556 高于 Proposed 0.8451 (凹聚合 Route C 数值), 但该优势以三重代价换取:
 %   (a) 无收敛证书: 硬最优响应不满足定理 2 前提 (λ→0 ⟹ κ→∞), q_th 不存在;
 %   (b) 零决策边距: argmax 间隔可被 FOU 量级扰动击穿 → 决策翻转;
 %   (c) 扰动脆弱: 与实验二相同扰动协议 (σ_ξ=δ/2, n=30) 下, 量化
@@ -462,13 +524,11 @@ for k = 1:n_perturb_e7
     soft_shift(k) = shift_sum / p.N;
 
     % 扰动收益 (终态策略固定, 状态核扰动)
-    [mu_l, mu_u] = sec4_1_1_induced_membership(pi_greedy, delta, p);
-    [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-    U_hat_g = sec4_2_1_crystallized_payoff(U_l, U_u);
+    [~, ~, U_hat_g] = sec4_1_2_mixed_payoff( ...
+        pi_greedy, delta, theta, p);
     U_greedy_pert(k) = mean(U_hat_g);
-    [mu_l, mu_u] = sec4_1_1_induced_membership(pi_prop_e7, delta, p);
-    [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-    U_hat_p = sec4_2_1_crystallized_payoff(U_l, U_u);
+    [~, ~, U_hat_p] = sec4_1_2_mixed_payoff( ...
+        pi_prop_e7, delta, theta, p);
     U_prop_pert(k) = mean(U_hat_p);
 end
 WC_greedy = quantile(U_greedy_pert, 0.05);

@@ -14,7 +14,7 @@ echo "消融对照实验测试开始"
 echo "================================="
 
 # 设置基本变量
-VEINS_DIR="/home/veins/src/veins"
+VEINS_DIR="${VEINS_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 EXAMPLE_DIR="$VEINS_DIR/examples/FuzzyVeins"
 RESULTS_DIR="$EXAMPLE_DIR/results/Ablation"
 LOG_DIR="$RESULTS_DIR/logs"

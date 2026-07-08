@@ -82,9 +82,8 @@ WC_q5   = zeros(1, n_m);  dist_to_prop = zeros(1, n_m);
 
 for k = 1:n_m
     d_k = deltas_solve(k);
-    [mu_l, mu_u] = sec4_1_1_induced_membership(pis{k}, d_k, params);
-    [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-    [U_hat, rho_k] = sec4_2_1_crystallized_payoff(U_l, U_u);
+    [~, ~, U_hat, rho_k] = sec4_1_2_mixed_payoff( ...
+        pis{k}, d_k, theta, params);
     U_mean(k) = mean(U_hat);
     margin(k) = (1 - alpha) * max(rho_k);
     if k == 4
@@ -95,8 +94,8 @@ for k = 1:n_m
 end
 
 %% 6) Lemma 1 数值精确性抽查: KM 区间 vs 闭式区间
-[mu_l, mu_u] = sec4_1_1_induced_membership(pi_prop, delta, params);
-[U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
+[U_l, U_u] = sec4_1_2_mixed_payoff( ...
+    pi_prop, delta, theta, params);
 km_err = 0;
 for i = 1:params.N
     [c_l, c_r, ~] = sec5_1_km_type_reduction(U_l(i), U_u(i), km_grid, false);
@@ -160,17 +159,15 @@ function [pi_star, history, stats] = solve_with_km(params, delta, theta, ...
 
     for r = 1:R_max
         pi_new = zeros(N, num_s);
+        [pure_lower, pure_upper] = ...
+            sec4_1_2_pure_interval_payoff_matrix( ...
+            pi_profile, delta, theta, params);
         for i = 1:N
             nu_i = zeros(num_s, 1);
             for j = 1:num_s
-                pi_temp = pi_profile;
-                pi_pure = zeros(1, num_s);  pi_pure(j) = 1.0;
-                pi_temp(i, :) = pi_pure;
-                [mu_l, mu_u] = sec4_1_1_induced_membership(pi_temp, delta, params);
-                [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
                 % --- 迭代式 KM/EKM type-reduction (替代 Lemma 1 闭式) ---
                 [c_l, c_r, n_it] = sec5_1_km_type_reduction(...
-                    U_l(i), U_u(i), km_grid, use_ekm);
+                    pure_lower(i, j), pure_upper(i, j), km_grid, use_ekm);
                 total_inner = total_inner + n_it;
                 total_calls = total_calls + 1;
                 nu_i(j) = (c_l + c_r) / 2 - (1 - alpha) * (c_r - c_l) / 2;
@@ -199,11 +196,18 @@ end
 
 function wc = worst_case_payoff(pi_star, delta_solve, theta, params, ...
     sigma_xi, n_perturb)
-%WORST_CASE_PAYOFF 扰动下 mean(U_hat) 的 5% 分位数 (同实验二口径)
+%WORST_CASE_PAYOFF 扰动下 mean(U_hat) 的 5% 分位数 (Worst-case 实现收益)
+%
+%   注 (Route C 公平性, 与 exp_5_1_2 worst_case_payoff 完全一致): "实现收益"
+%   评估在点隶属度 (δ=0) 下进行 —— 扰动 σ_ξ 已代表不确定性的一次实现, FOU
+%   半带宽 δ 是决策时的先验不确定带, 不应再叠加到实现收益上 (否则凹聚合的
+%   中心偏移 -Σθδ² 会被不公平地计入实现收益, 使 IT2/Proposed 相对 Type-1
+%   系统性偏低)。各方法仅在求解 π* 时按各自 δ 决策, 实现收益统一在 δ=0 下
+%   评估, 差异完全来自决策 π* 的鲁棒性。delta_solve 保留仅作签名兼容。
+    delta_realized = 0;   % 实现收益采用点隶属度 (见上)
     if sigma_xi <= 0
-        [mu_l, mu_u] = sec4_1_1_induced_membership(pi_star, delta_solve, params);
-        [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-        [U_hat, ~] = sec4_2_1_crystallized_payoff(U_l, U_u);
+        [~, ~, U_hat] = sec4_1_2_mixed_payoff( ...
+            pi_star, delta_realized, theta, params);
         wc = mean(U_hat); return;
     end
     U_hat_means = zeros(n_perturb, 1);
@@ -216,9 +220,8 @@ function wc = worst_case_payoff(pi_star, delta_solve, theta, params, ...
             sigma_xi * randn(size(params.delay_matrix)));
         p.res_matrix = clip01(params.res_matrix + ...
             sigma_xi * randn(size(params.res_matrix)));
-        [mu_l, mu_u] = sec4_1_1_induced_membership(pi_star, delta_solve, p);
-        [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-        [U_hat, ~] = sec4_2_1_crystallized_payoff(U_l, U_u);
+        [~, ~, U_hat] = sec4_1_2_mixed_payoff( ...
+            pi_star, delta_realized, theta, p);
         U_hat_means(k) = mean(U_hat);
     end
     wc = quantile(U_hat_means, 0.05);

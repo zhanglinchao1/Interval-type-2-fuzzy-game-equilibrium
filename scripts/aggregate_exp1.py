@@ -78,21 +78,16 @@ for nv, m, s, pdr, p99, u, sw, nn in per_run:
 # 4. 写 CSV + 终端表
 # chapter 5.2 §5.2.2 长期收益 = raw Û - maliciousRatio × exposure(method) × ρ
 # 不同方法对恶意车辆的暴露度（plan §7.3）
-EXPOSURE = {
-    "Greedy":   1.0,  # 无鲁棒防护，完全暴露
-    "FixedW":   0.7,  # 缺动态治理 ω
-    "Proposed": 0.0,  # α-cut + governance + W-FBRI 三重防护
-}
+# NOTE (integrity fix): the former EXPOSURE dictionary assigned a payoff
+# penalty by METHOD NAME (Proposed always 0, Greedy always max), so the
+# "effective payoff" was fabricated rather than measured. It is removed;
+# effective_uhat now returns the measured payoff unchanged.
 MALICIOUS_RATIO = 0.10  # 与 omnetpp.ini *.appl.maliciousRatio 对齐
 
 
 def effective_uhat(method, avg_uhat, avg_rho):
-    # 暴露惩罚：方法对恶意车辆的脆弱度
-    # 当 method 用 δ=0（如 Greedy）时 ρ=0，此时用名义 ρ=0.10 让 penalty 显化
-    # （Greedy 没有 IT2 不确定区间，但实际仍暴露在恶意车辆 ±10% 信誉伪报下）
-    e = EXPOSURE.get(method, 0.5)
-    rho_used = max(avg_rho, 0.10)
-    return max(0.0, avg_uhat - MALICIOUS_RATIO * e * rho_used)
+    # Measured only -- no method-name-based adjustment (see integrity note).
+    return avg_uhat
 
 
 # 收集 avg_rho 一并算 effective

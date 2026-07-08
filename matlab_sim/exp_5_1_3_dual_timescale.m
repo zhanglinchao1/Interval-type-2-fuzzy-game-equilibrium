@@ -2,9 +2,9 @@
 %
 % 验证目标 (对齐 chapter5.md §5.1 实验三新版设计):
 %   (i)   切空间最大对称特征值 λ_max^T < 0 在所有 ε_g 下成立 (定理 3 (4-34))
-%   (ii)  联合 Lyapunov V(x, ω) 沿耦合轨迹单调下降到低值平台
+%   (ii)  终态参考能量沿耦合轨迹下降（数值诊断，不替代 A5 证明）
 %   (iii) 固定物理时间下 d_slow 和 Osc 随 ε_g 增大, 反映时间尺度分离误差
-%   (iv)  匹配慢时间运行到 ||g||_∞<g_tol 后, d_slow(tc) 呈 O(ε_g) 标度
+%   (iv)  匹配慢时间运行到 ||g||_∞<g_tol 后记录 d_slow(tc)；仅作终点诊断
 %   (v)   过大 ε_g (1e-2) 破坏时间尺度分离假设, 导致 Osc 与 d_slow 同步增大
 %
 % 关键指标 (差异敏感):
@@ -14,11 +14,11 @@
 %   ||g||_∞(T) - 治理驱动项末值
 %
 % 输出:
-%   image/fig5_9_strategy_evolution.png    - 群体 x(t) 演化, 按 ε_g 分 3 子图
+%   image/fig5_9_slow_manifold.png         - 慢流形跟踪误差 d_slow(t), 三 ε_g 叠加
 %   image/fig5_10_governance_weights.png   - ω(h) 与 θ(h) 演化 (代表性 ε_g=1e-3)
-%   image/fig5_11_lyapunov.png             - 联合 Lyapunov V 下降曲线 (log scale)
+%   image/fig5_11_lyapunov.png             - 终态参考能量下降曲线 (log scale)
 %   image/fig5_12_eps_g_scaling.png        - 固定物理时间下 ε_g vs Osc/d_slow 诊断图
-%   image/fig5_12_matched_slow_scaling.png - 匹配慢时间收敛点 O(ε_g) 标度图
+%   image/fig5_12_matched_slow_scaling.png - 匹配慢时间收敛点诊断图
 %   table/table5_3_dual_timescale_stability.csv
 
 clear; clc; close all;
@@ -26,6 +26,8 @@ clear; clc; close all;
 %% 全局字体设置
 set(0, 'DefaultAxesFontName', 'Times New Roman');
 set(0, 'DefaultTextFontName', 'Times New Roman');
+set(0, 'DefaultAxesFontSize', 12);
+set(0, 'DefaultTextFontSize', 12);
 
 %% 路径与输出目录
 script_dir = fileparts(mfilename('fullpath'));
@@ -49,8 +51,8 @@ params.dt_evo = 0.05;
 % 设计目标: 构造内点稳定的快子系统, 使慢流形 x*(ω) 随治理权重移动。
 % 对角线较低表示同类策略拥挤/竞争, 非对角交互较高表示异质协作收益;
 % 三个矩阵分别强调 trust、delay、resource 维度下的协作互补性。
-% 该设置避免顶点吸收导致 d_slow 在长时退化为数值零, 因而适合验证
-% Proposition 4 的 O(epsilon_g) 慢流形跟踪误差。
+% 该设置避免顶点吸收导致 d_slow 在长时退化为数值零, 因而适合观察
+% Proposition 4 所讨论的有限 epsilon_g 慢流形跟踪行为。
 params.trust_matrix = [0.32, 0.82, 0.76, 0.70;
                        0.80, 0.34, 0.73, 0.68;
                        0.72, 0.69, 0.33, 0.77;
@@ -179,46 +181,49 @@ for e_idx = 1:num_eps
     fprintf('  λ_V 前半段衰减率 = %.4e\n\n', lambda_V_descent(e_idx));
 end
 
-%% Fig 5-9: Population strategy x(t) evolution (3 subplots by eps_g)
-figure('Name', 'Population Strategy Evolution', 'Position', [100, 80, 1200, 380]);
-strategy_names  = {'x_{SC}', 'x_{SP}', 'x_{DC}', 'x_{DP}'};
-strategy_colors = {[0.0 0.45 0.74], [0.85 0.33 0.10], ...
-                   [0.93 0.69 0.13], [0.49 0.18 0.56]};
-line_widths     = [2.4, 1.8, 1.8, 1.6];
-
+%% Fig 5-9: Slow-manifold tracking error d_slow(t) (single-column, 3 eps_g overlaid)
+% 三条 ε_g 叠加于一张单栏图: 群体对慢流形 x*(ω(t)) 的跟踪误差
+%   d_slow(t) = ||x(t) - x*(ω(t))||_2
+% 观察有限 ε_g 平台, 与 Table V 的 d_slow(T) 列搭配说明。
+% 慢流形逐点求解成本较高, 故对轨迹子采样 n_sub 个点 (以 x(t) 暖启动加速)。
+figure('Name', 'Slow-Manifold Tracking', 'Position', [100, 100, 470, 340]);
+eps_colors = {[0.0 0.45 0.74], [0.85 0.33 0.10], [0.47 0.67 0.19]};
+eps_styles = {'-', '--', ':'};
+n_sub = 70;
+leg_entries = cell(num_eps, 1);
+hold on;
 for e_idx = 1:num_eps
-    subplot(1, num_eps, e_idx);
-    x_hist_plot = all_x_hist{e_idx};
-    T_plot = size(x_hist_plot, 1);
-    t_axis = (1:T_plot) * params.dt_evo;
-    hold on;
-    for j = 1:4
-        plot(t_axis, x_hist_plot(:, j), '-', ...
-            'Color', strategy_colors{j}, 'LineWidth', line_widths(j));
+    x_hist_e     = all_x_hist{e_idx};
+    omega_hist_e = all_omega_hist{e_idx};
+    T_e = size(x_hist_e, 1);
+    idx_sub = unique(round(linspace(1, T_e, n_sub)));
+    t_sub = idx_sub(:) * params.dt_evo;
+    d_sub = zeros(numel(idx_sub), 1);
+    for q = 1:numel(idx_sub)
+        tt = idx_sub(q);
+        x_star_tt = sec5_1_slow_manifold(omega_hist_e(tt, :)', params, ...
+            x_hist_e(tt, :)');
+        d_sub(q) = norm(x_hist_e(tt, :)' - x_star_tt, 2);
     end
-    hold off;
-    xlabel('Evolution Time t', 'FontSize', 11);
-    ylabel('Population Strategy Proportion', 'FontSize', 11);
-    title(sprintf(['\\epsilon_g = 10^{%d}\n' ...
-        'd_{slow}=%.2e, ||g||_\\infty=%.3f, \\lambda^T=%.3f'], ...
-        round(log10(eps_g_values(e_idx))), d_slow_T(e_idx), ...
-        g_inf_T(e_idx), lambda_max_T(e_idx)), 'FontSize', 10);
-    % 群体策略全程落在 [0.20,0.30], 固定 y 轴到 [0.15,0.35] (上下各留 0.05 余白)
-    % 既避免贴边裁切又放大纵向分辨率, 四条策略曲线清晰可分辨
-    ylim([0.15, 0.35]);
-    yticks(0.15:0.05:0.35);
-    grid on;
-    if e_idx == num_eps
-        legend(strategy_names, 'Location', 'east', 'FontSize', 9);
-    end
+    d_sub = max(d_sub, 1e-12);
+    plot(t_sub, d_sub, eps_styles{e_idx}, 'Color', eps_colors{e_idx}, ...
+        'LineWidth', 2.2);
+    leg_entries{e_idx} = sprintf('\\epsilon_g = 10^{%d}', ...
+        round(log10(eps_g_values(e_idx))));
 end
-sgtitle('Population Strategy x(t) Evolution Under Different Governance Step Sizes (Fast Subsystem \rightarrow Fuzzy-ESS)', ...
-    'FontSize', 13);
-saveas(gcf, fullfile(img_dir, 'fig5_9_strategy_evolution.png'));
+hold off;
+set(gca, 'YScale', 'log');   % 平台跨越多个数量级, 三条曲线方可分辨
+ylim([1e-7, 1e-1]);
+xlabel('Evolution Time t');
+ylabel('Slow-manifold distance d_{slow}(t)');
+legend(leg_entries, 'Location', 'northeast');
+grid on; box on;
+apply_fig5_publication_style(gcf);
+saveas(gcf, fullfile(img_dir, 'fig5_9_slow_manifold.png'));
 % 矢量 PDF: exportgraphics 默认按内容边界裁剪, 无整页留白边框
-exportgraphics(gcf, fullfile(img_dir, 'fig5_9_strategy_evolution.pdf'), ...
+exportgraphics(gcf, fullfile(img_dir, 'fig5_9_slow_manifold.pdf'), ...
     'ContentType', 'vector', 'BackgroundColor', 'white');
-fprintf('[图] %s\n', fullfile('image', 'fig5_9_strategy_evolution.png'));
+fprintf('[图] %s\n', fullfile('image', 'fig5_9_slow_manifold.png'));
 
 %% 图5-10: 治理权重 ω(h) 与收益层权重 θ(h) 演化 (代表性 ε_g=1e-3)
 default_idx = 2;
@@ -260,13 +265,15 @@ grid on;
 sgtitle(sprintf(['Governance Weight \\omega(h) and \\theta(h) Slow-Timescale Trajectory ' ...
     '(\\epsilon_g=10^{-3}, \\epsilon_g\\cdot T\\cdot dt=%.2f)'], ...
     eps_g_values(default_idx) * params.T_evo * params.dt_evo), 'FontSize', 12);
+apply_fig5_publication_style(gcf);
 saveas(gcf, fullfile(img_dir, 'fig5_10_governance_weights.png'));
 exportgraphics(gcf, fullfile(img_dir, 'fig5_10_governance_weights.pdf'), ...
     'ContentType', 'vector', 'BackgroundColor', 'white');
 fprintf('[图] %s\n', fullfile('image', 'fig5_10_governance_weights.png'));
 
 %% Fig 5-11: Joint Lyapunov V(x, omega) descent curve (grouped by eps_g, log scale)
-figure('Name', 'Joint Lyapunov Descent', 'Position', [200, 100, 850, 520]);
+% 单栏竖排子图(a): 画布缩到 ~480px 使正文 \columnwidth 下字号 >=8pt; (a)/(b) 标签置于图内顶部, 全局一致
+figure('Name', 'Joint Lyapunov Descent', 'Position', [200, 100, 480, 330]);
 eps_colors = {[0.0 0.45 0.74], [0.85 0.33 0.10], [0.49 0.18 0.56]};
 hold on;
 for e_idx = 1:num_eps
@@ -278,14 +285,12 @@ hold off;
 set(gca, 'YScale', 'log');
 xlabel('Evolution Time Step', 'FontSize', 12);
 ylabel('Joint Lyapunov V(x, \omega)', 'FontSize', 12);
-V0_max = max(arrayfun(@(e) all_V_hist{e}(1), 1:num_eps));
-title({sprintf('Joint Lyapunov Descent Along Coupled Trajectory (Eq. 4-42)'), ...
-    sprintf('V(0)\\approx%.2f \\rightarrow V(T)\\rightarrow 10^{-12} (\\sim12 orders of magnitude)', ...
-    V0_max)}, 'FontSize', 11);
+title('(a) Joint Lyapunov descent', 'FontSize', 12);
 legend(arrayfun(@(e) sprintf('\\epsilon_g = 10^{%d}', round(log10(e))), ...
     eps_g_values, 'UniformOutput', false), ...
     'Location', 'southwest', 'FontSize', 11);
 grid on;
+apply_fig5_publication_style(gcf);
 saveas(gcf, fullfile(img_dir, 'fig5_11_lyapunov.png'));
 exportgraphics(gcf, fullfile(img_dir, 'fig5_11_lyapunov.pdf'), ...
     'ContentType', 'vector', 'BackgroundColor', 'white');
@@ -329,15 +334,16 @@ text(eps_g_values(1) * 1.5, max(d_slow_T) * 0.5, ...
     'FontSize', 9, 'Color', [0.3 0.3 0.3], ...
     'BackgroundColor', [1 1 0.85]);
 grid on;
+apply_fig5_publication_style(gcf);
 saveas(gcf, fullfile(img_dir, 'fig5_12_eps_g_scaling.png'));
 exportgraphics(gcf, fullfile(img_dir, 'fig5_12_eps_g_scaling.pdf'), ...
     'ContentType', 'vector', 'BackgroundColor', 'white');
 fprintf('[图] %s\n', fullfile('image', 'fig5_12_eps_g_scaling.png'));
 
-%% Fig 5-12b: Matched slow-time convergence point scaling
+%% Fig 5-12b: Matched slow-time convergence-point diagnostic
 % 固定 wall-time 只验证快变量贴近慢流形, 不能证明慢变量已到 g=0。
 % 这里按慢时间 t_g = epsilon_g * t 运行到 ||g||_inf < g_tol, 在收敛点测
-% d_slow, 用于验证 Proposition 4 的慢子系统终点与 O(epsilon_g) 跟踪标度。
+% d_slow。最小 ε_g 下可能进入数值误差地板，因此不把三点斜率当作定理验证。
 g_tol_match = 1e-3;
 t_g_cap = 6.0;
 dt_match = params.dt_evo;
@@ -368,8 +374,8 @@ end
 log_dslow_match = log10(max(matched_d_slow, 1e-16));
 p_dslow_match = polyfit(log_eps, log_dslow_match, 1);
 
-figure('Name', 'Matched Slow-Time O(epsilon_g) Scaling', ...
-    'Position', [260, 100, 860, 520]);
+figure('Name', 'Matched Slow-Time Diagnostic', ...
+    'Position', [260, 100, 480, 330]);
 hold on;
 loglog(eps_g_values, matched_d_slow, 'o-', ...
     'Color', [0.0 0.45 0.74], 'LineWidth', 2.4, ...
@@ -380,12 +386,12 @@ hold off;
 set(gca, 'XScale', 'log', 'YScale', 'log');
 xlabel('Governance Step Size \epsilon_g', 'FontSize', 12);
 ylabel('Convergence-point d_{slow}', 'FontSize', 12);
-title(sprintf(['Matched Slow-Time Scaling After Governance Convergence\n' ...
-    'slope %.2f, ||g||_\\infty < %.0e for all tested \\epsilon_g'], ...
-    p_dslow_match(1), g_tol_match), 'FontSize', 11);
-legend({sprintf('d_{slow}(t_c), slope=%.2f', p_dslow_match(1)), ...
-        'O(\epsilon_g) reference'}, 'Location', 'northwest', 'FontSize', 10);
+title('(b) Matched slow-time diagnostic', 'FontSize', 12);
+legend({sprintf('d_{slow}(t_c), descriptive slope=%.2f', ...
+        p_dslow_match(1)), 'Linear reference (guide only)'}, ...
+        'Location', 'northwest', 'FontSize', 10);
 grid on;
+apply_fig5_publication_style(gcf);
 exportgraphics(gcf, fullfile(img_dir, 'fig5_12_matched_slow_scaling.png'), ...
     'Resolution', 300, 'BackgroundColor', 'white');
 exportgraphics(gcf, fullfile(img_dir, 'fig5_12_matched_slow_scaling.pdf'), ...
@@ -393,8 +399,8 @@ exportgraphics(gcf, fullfile(img_dir, 'fig5_12_matched_slow_scaling.pdf'), ...
 fprintf('[图] %s\n', fullfile('image', 'fig5_12_matched_slow_scaling.png'));
 
 sync_named_figures(img_dir, fullfile(script_dir, '..', 'Latex'), {
-    'fig5_9_strategy_evolution.png';
-    'fig5_9_strategy_evolution.pdf';
+    'fig5_9_slow_manifold.png';
+    'fig5_9_slow_manifold.pdf';
     'fig5_10_governance_weights.png';
     'fig5_10_governance_weights.pdf';
     'fig5_11_lyapunov.png';
@@ -431,6 +437,32 @@ csv_path = fullfile(tbl_dir, 'table5_3_dual_timescale_stability.csv');
 writetable(T, csv_path);
 fprintf('\n[表] %s\n', fullfile('table', 'table5_3_dual_timescale_stability.csv'));
 
+% A2/A5 局部 premise diagnostics：只评价代表性轨迹终点，不外推为全局证书。
+omega_diag = final_omega(2, :)';
+premise = sec5_1_premise_diagnostics(omega_diag, params);
+Tp = table(premise.L_sigma_local, premise.c_omega_local, ...
+    premise.lambda_max_tangent, premise.fast_margin_local, ...
+    premise.reduced_residual_inf, premise.basin_spread, ...
+    premise.num_basin_initializations, premise.governance_basin_spread, ...
+    premise.num_governance_initializations, ...
+    premise.fixed_point_iterations, premise.global_certificate, ...
+    premise.epsilon_g_threshold, ...
+    'VariableNames', {'L_sigma_local','c_omega_local', ...
+    'LambdaMaxTangentLocal','FastMarginLocal','ReducedResidualInf', ...
+    'FastBasinSpread','NumFastInitializations', ...
+    'GovernanceBasinSpread','NumGovernanceInitializations', ...
+    'FixedPointIterations','GlobalCertificate', ...
+    'CertifiedEpsilonGThreshold'});
+writetable(Tp, fullfile(tbl_dir, 'table5_3b_premise_diagnostics.csv'));
+fprintf('[表] %s\n', fullfile('table', ...
+    'table5_3b_premise_diagnostics.csv'));
+fprintf(['[局部前提诊断] L_sigma=%.4f, c_omega=%.4g, fast/governance ' ...
+    'basin spread=[%.3e, %.3e]; ' ...
+    'global certificate=%d\n'], premise.L_sigma_local, ...
+    premise.c_omega_local, premise.basin_spread, ...
+    premise.governance_basin_spread, ...
+    premise.global_certificate);
+
 %% 预期结论自动验证
 fprintf('\n===== 预期结论自动验证 =====\n');
 
@@ -442,7 +474,7 @@ for e_idx = 1:num_eps
         eps_g_values(e_idx), lambda_max_T(e_idx));
 end
 
-% (ii) Lyapunov 沿耦合轨迹单调下降 (下降步占比 ≥ 95%) 且 V(0) >> V(T)
+% (ii) 终态参考能量下降；这是轨迹诊断，不替代 A5/Lyapunov 证明
 all_descent_ratio_ok = all(lyap_descent_ratio >= 0.95);
 v_collapse_ok = true;
 for e_idx = 1:num_eps
@@ -451,7 +483,7 @@ for e_idx = 1:num_eps
         v_collapse_ok = false;
     end
 end
-fprintf('(ii)  Lyap 单调下降 (≥95%%) 且 V(0) >> V(T): %s\n', ...
+fprintf('(ii)  终态参考能量下降 (≥95%%) 且 V(0) >> V(T): %s [诊断]\n', ...
     pass_label(all_descent_ratio_ok && v_collapse_ok));
 for e_idx = 1:num_eps
     V_curve = all_V_hist{e_idx};
@@ -473,12 +505,11 @@ fprintf('      Osc 单调:  %s, 斜率 = %.3f %s\n', ...
 fprintf('      d_slow 单调: %s, 斜率 = %.3f %s\n', ...
     pass_label(dsl_monotone_inc), p_dsl(1), pass_label(slope_range_dsl));
 
-% (iii-b) 匹配慢时间: 运行到 ||g||_inf < g_tol 后, d_slow 呈 O(epsilon_g)
+% (iii-b) 匹配慢时间: 只检查均到达同一治理残差阈值。
 matched_all_converged = all(matched_converged) && all(matched_g_inf < g_tol_match);
-matched_slope_ok = p_dslow_match(1) >= 0.80 && p_dslow_match(1) <= 1.20;
-fprintf('(iii-b) 匹配慢时间收敛点 O(ε_g) 标度: %s\n', ...
-    pass_label(matched_all_converged && matched_slope_ok));
-fprintf('        slope(d_slow(tc)) = %.3f, g_tol = %.1e\n', ...
+fprintf('(iii-b) 匹配慢时间均到达治理残差阈值: %s\n', ...
+    pass_label(matched_all_converged));
+fprintf('        descriptive slope(d_slow(tc)) = %.3f, g_tol = %.1e; 不作阶数判定\n', ...
     p_dslow_match(1), g_tol_match);
 for e_idx = 1:num_eps
     fprintf('        ε_g=%.0e: t_g=%.3f, ||g||_∞=%.3e, d_slow=%.3e\n', ...
@@ -516,7 +547,7 @@ function report = simulate_matched_slow_time(x0, omega0, params, eps_g, ...
     dt, g_tol, t_g_cap)
 %SIMULATE_MATCHED_SLOW_TIME  按慢时间运行到治理驱动收敛。
 %   t_g = epsilon_g * t; 在 ||sigma(Delta)-omega||_inf < g_tol 时记录
-%   慢流形偏差 d_slow, 用于验证收敛点附近的 O(epsilon_g) 跟踪误差。
+%   慢流形偏差 d_slow；结果用于终点诊断，不单独证明渐近阶数。
     max_steps = ceil(t_g_cap / max(eps_g * dt, eps));
     x = x0(:);
     omega = omega0(:);

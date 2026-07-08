@@ -31,3 +31,7 @@ code/.codex/
 
 # Editor / shell noise
 .qtenvrc
+
+# Generated OMNeT++ message code (regenerated from .msg at build)
+**/*_m.cc
+**/*_m.h

@@ -37,9 +37,8 @@ function [pi_star, history] = sec5_1_greedy_solve(params, delta, theta)
         residuals = sum(abs(pi_new - pi_profile), 2);
         e_pi = max(residuals);
 
-        [mu_l, mu_u] = sec4_1_1_induced_membership(pi_new, delta, params);
-        [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-        [U_hat, ~] = sec4_2_1_crystallized_payoff(U_l, U_u);
+        [~, ~, U_hat] = sec4_1_2_mixed_payoff( ...
+            pi_new, delta, theta, params);
 
         history.residual(r) = e_pi;
         history.avg_payoff(r) = mean(U_hat);

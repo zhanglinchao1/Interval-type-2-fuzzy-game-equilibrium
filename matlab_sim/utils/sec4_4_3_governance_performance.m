@@ -51,6 +51,14 @@ function Delta_h = sec4_4_3_governance_performance(x, omega, P_pay, params)
         Delta_h(ell) = marginal_gain - omega_penalty;
     end
 
-    % 轻微噪声模拟观测扰动（保持有界 Lipschitz）
-    Delta_h = Delta_h + 0.005 * randn(K, 1);
+    % 理论与 premise diagnostics 使用确定性治理映射。若仅做压力测试，可显式
+    % 设置 governance_noise_std>0；带随机噪声的轨迹不用于验证 A3/A5。
+    if isfield(params, 'governance_noise_std')
+        noise_std = params.governance_noise_std;
+    else
+        noise_std = 0;
+    end
+    if noise_std > 0
+        Delta_h = Delta_h + noise_std * randn(K, 1);
+    end
 end

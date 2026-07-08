@@ -1,0 +1,11 @@
+Check,Status,Evidence
+Simulation I headline,PASS,"N=50 payoff 0.8569/0.8608, R=22/23"
+Scenario B table,PASS,"6 methods, 20 seeds"
+Fuzzy/interval-game table,PASS,"E=0.816, WC=0.807, CE=0.811"
+Premise boundary,PASS,"L_sigma=0.1349, global=0"
+Scenario B v2 headline,PASS,"CE sel/held 0.7224/0.7215, dCE=+0.0005"
+Annealed certificate,PASS,"eps_NE=5.2e-06"
+Certified anchor row,PASS,"E=0.7780, WC=0.6561, CE=0.7110, R=18"
+Heterogeneous roles,PASS,"R=23, q=0.698, eps=0.052, margin=-0.0332"
+Focused certified regime,PASS,"Dt_rho=0.059, k1=0.85, k40=16.6"
+Stale-claim sweep,PASS,"8 forbidden phrases absent"

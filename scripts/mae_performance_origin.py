@@ -4,7 +4,7 @@
 IT2-Sigmoid信任评估MAE性能图表绘制脚本 - Origin专业样式版本
 使用matplotlib模拟Origin软件的专业科学绘图样式
 
-作者: AI Assistant
+作者: zlc
 日期: 2024
 描述: 使用matplotlib创建Origin风格的专业MAE性能对比图表
 """

@@ -1,13 +1,25 @@
 % verify_setup.m - 环境与代码完整性快速验证
 % 运行此脚本确认所有函数文件正确加载且基本逻辑无误
-% 共 15 项检查，对应 dev_plan.md 中"一致性检查清单"
+% 共 17 项检查，对应 dev_plan.md 中"一致性检查清单"
 
 clear; clc;
 script_dir = fileparts(mfilename('fullpath'));
 addpath(fullfile(script_dir, 'utils'));
 
-fprintf('===== 代码完整性验证 (15 项) =====\n\n');
+fprintf('===== 代码完整性验证 (17 项) =====\n\n');
 errors = 0;
+
+%% 0. SOTA 混合策略最优响应所需 Optimization Toolbox 入口
+try
+    assert(exist('fmincon', 'file') == 2, ...
+        '缺少 fmincon；RQE/MF-RQE 完整混合策略 B_opt 无法运行。');
+    assert(exist('linprog', 'file') == 2, ...
+        '缺少 linprog；CVaR-game 完整混合策略 LP 无法运行。');
+    fprintf('[ OK ] SOTA optimization dependencies: fmincon/linprog 可用\n');
+catch ME
+    fprintf('[FAIL] SOTA optimization dependencies: %s\n', ME.message);
+    errors = errors + 1;
+end
 
 %% 1. config_params (含论文 (3-8) θ=P_pay·ω 一致性)
 try
@@ -61,7 +73,12 @@ end
 %% 4. sec4_1_2_it2_payoff
 try
     theta = params.theta;     % 从 config_params 统一取值 = P_pay × omega_init
-    [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
+    % 独立测试纯策略端点聚合器；不得把上一步的混合 membership
+    % 连接成博弈收益，否则会重新引入被 M1 排除的 g(E[mu]) 路径。
+    mu_l_pure = [0.20, 0.35, 0.50; 0.45, 0.25, 0.30];
+    mu_u_pure = [0.30, 0.45, 0.60; 0.55, 0.35, 0.40];
+    [U_l, U_u] = sec4_1_2_it2_payoff( ...
+        mu_l_pure, mu_u_pure, theta);
     assert(all(U_l <= U_u));
     assert(all(U_l >= 0) && all(U_u <= 1));
     fprintf('[ OK ] sec4_1_2_it2_payoff: 收益范围正确\n');
@@ -107,7 +124,21 @@ catch ME
     errors = errors + 1;
 end
 
-%% 8. sec4_4_1_population_payoff
+%% 8. 唯一混合扩展与纯策略收益一致
+try
+    [U_mix_l, U_mix_u, U_mix_h, rho_mix, pure] = ...
+        sec4_1_2_mixed_payoff(pi_test, 0.1, theta, params);
+    assert(max(abs(U_mix_l - sum(pi_test .* pure.U_lower, 2))) < 1e-12);
+    assert(max(abs(U_mix_u - sum(pi_test .* pure.U_upper, 2))) < 1e-12);
+    assert(max(abs(U_mix_h - sum(pi_test .* pure.U_hat, 2))) < 1e-12);
+    assert(max(abs(rho_mix - sum(pi_test .* pure.rho, 2))) < 1e-12);
+    fprintf('[ OK ] canonical mixed extension: 与纯策略收益加权恒等\n');
+catch ME
+    fprintf('[FAIL] canonical mixed extension: %s\n', ME.message);
+    errors = errors + 1;
+end
+
+%% 9. sec4_4_1_population_payoff
 try
     x_test = [0.3; 0.3; 0.2; 0.2];
     U_j = sec4_4_1_population_payoff(x_test, theta, params);
@@ -119,7 +150,7 @@ catch ME
     errors = errors + 1;
 end
 
-%% 9. sec4_3_1_wfbri_solve (小规模快速测试)
+%% 10. sec4_3_1_wfbri_solve (小规模快速测试)
 try
     params_small = config_params();
     params_small.N = 5;
@@ -134,7 +165,7 @@ catch ME
     errors = errors + 1;
 end
 
-%% 10. sec4_4_4_dual_timescale (含 Lyapunov 序列)
+%% 11. sec4_4_4_dual_timescale (含 Lyapunov 序列)
 try
     params_small.T_evo = 50;
     params_small.dt_evo = 0.05;
@@ -156,7 +187,7 @@ catch ME
     errors = errors + 1;
 end
 
-%% 11. sec4_2_2_robust_alpha_fne
+%% 12. sec4_2_2_robust_alpha_fne
 try
     params_chk = config_params();
     params_chk.N = 5;
@@ -165,14 +196,15 @@ try
     report = sec4_2_2_robust_alpha_fne(pi_chk, 0.1, theta, 0.5, params_chk, 10);
     assert(isfield(report, 'eps_required'));
     assert(report.eps_required >= 0);
-    assert(report.total_checks == params_chk.N * 10);
+    assert(report.total_checks == params_chk.N * params_chk.num_strategies);
+    assert(report.certificate_slack >= -1e-12);
     fprintf('[ OK ] sec4_2_2_robust_alpha_fne: 不等式验证正常运行\n');
 catch ME
     fprintf('[FAIL] sec4_2_2_robust_alpha_fne: %s\n', ME.message);
     errors = errors + 1;
 end
 
-%% 12. sec4_4_3_governance_performance 显式依赖 ω
+%% 13. sec4_4_3_governance_performance 显式依赖 ω
 try
     x_test = [0.3; 0.3; 0.2; 0.2];
     omega1 = ones(5, 1) / 5;
@@ -188,7 +220,7 @@ catch ME
     errors = errors + 1;
 end
 
-%% 13. N=2 手算公式校验 (对应 dev_plan.md §4.4.1)
+%% 14. N=2 留一法与纯策略收益手算校验
 try
     params_v = config_params();
     params_v.N = 2;
@@ -198,18 +230,27 @@ try
     theta_v = params_v.theta;   % = P_pay × omega_init = [0.40; 0.35; 0.25]
     nu_v = sec4_3_1_pure_payoff_vector(pi_profile_v, delta_v, theta_v, ...
         params_v, 1);
-    expected_nu_1_1 = 0.727;
+    x_minus_1 = pi_profile_v(2, :)';
+    mu_1_1 = [params_v.trust_matrix(1, :) * x_minus_1; ...
+              params_v.delay_matrix(1, :) * x_minus_1; ...
+              params_v.res_matrix(1, :) * x_minus_1];
+    mu_l_1_1 = max(0, mu_1_1 - delta_v);
+    mu_u_1_1 = min(1, mu_1_1 + delta_v);
+    [expected_l, expected_u] = sec4_1_2_it2_payoff( ...
+        mu_l_1_1', mu_u_1_1', theta_v, params_v.payoff_aggregation);
+    expected_nu_1_1 = (expected_l + expected_u) / 2;
     diff_v = abs(nu_v(1) - expected_nu_1_1);
-    assert(diff_v < 1e-3, ...
-        sprintf('手算 ν_{1,1}=0.727, 代码=%.4f, 偏差=%.2e', nu_v(1), diff_v));
-    fprintf('[ OK ] N=2 手算校验: ν_{1,1}=%.4f (期望 0.727, 偏差 %.2e)\n', ...
+    assert(diff_v < 1e-12, ...
+        sprintf('留一法手算=%.12f, 代码=%.12f, 偏差=%.2e', ...
+        expected_nu_1_1, nu_v(1), diff_v));
+    fprintf('[ OK ] N=2 留一法手算: ν_{1,1}=%.4f (偏差 %.2e)\n', ...
         nu_v(1), diff_v);
 catch ME
     fprintf('[FAIL] N=2 手算校验: %s\n', ME.message);
     errors = errors + 1;
 end
 
-%% 14. α-cut (4-13)(4-14) 代数恒等式校验
+%% 15. α-cut (4-13)(4-14) 代数恒等式校验
 try
     U_l_t = [0.3; 0.4; 0.5];
     U_u_t = [0.5; 0.7; 0.8];
@@ -227,7 +268,7 @@ catch ME
     errors = errors + 1;
 end
 
-%% 15. (4-29) 群体收益代数恒等式
+%% 16. (4-29) 群体收益代数恒等式
 try
     x_v = [0.3; 0.3; 0.2; 0.2];
     params_v = config_params();
@@ -249,7 +290,7 @@ end
 %% 总结
 fprintf('\n===== 验证结果 =====\n');
 if errors == 0
-    fprintf('全部通过! 15/15 检查项无误\n');
+    fprintf('全部通过! 17/17 检查项无误\n');
     fprintf('可以运行 run_all.m 执行完整实验\n');
 else
     fprintf('发现 %d 个错误，请检查对应模块\n', errors);

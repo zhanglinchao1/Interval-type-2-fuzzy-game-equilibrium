@@ -5,28 +5,34 @@
 %         ||π*(α) - π*(α')||_1 ≤ N·ρ̄_var / (2λ(1-κ)) · |α - α'|
 %       其中 ρ̄_var = max_i range_j ρ_{i,j} 为不确定半径的跨策略变差,
 %       κ = D_ν/(2λ) 为命题 1 结构化收缩模量 (bell-FOU: D_ν = D(θ)+4(1-α)E(θ))
-%   (b) 均匀 FOU 退化预言: ρ̄_var = 0 ⟹ 均衡路径关于 α **逐点恒定**
-%       (悲观收缩对所有策略同步平移, softmax 平移不变 ⟹ π*(α) ≡ π*(1))
+%   (b) Route C 凹聚合下两条 FOU 路线均非退化: 凹聚合 g(μ)=2μ-μ² 使
+%       ρ_{i,j}=Σθ·2(1-μ_{i,j})δ 随策略 j 异质 (μ 异质 ⟹ ρ 异质), 故即便
+%       **均匀 FOU** 也有 ρ̄_var>0, 均衡路径关于 α 非恒定但严格 Lipschitz 正则。
+%       (线性聚合下均匀 FOU 才退化为 ρ̄_var=0 的恒定路径; 凹聚合消除了该退化,
+%        与中心分离卖点一致 —— IT2 永不塌缩为 Type-1, 见 exp_5_1_7。)
 %   (c) 定理 2(ii) FOU 规避单调性: 软响应似然比
 %         log([BR]_j/[BR]_{j'}) = (ν_j^α - ν_{j'}^α)/λ
 %       关于 α 严格线性递增, 斜率恰为 (ρ_{i,j} - ρ_{i,j'})/λ
 %   (d) 群体层面: α 下降时均衡质量从高 ρ 策略向低 ρ 策略转移
 %
-% 实验配置 (两条 FOU 路线分开认证):
-%   Part A - uniform FOU: δ=0.10, λ=0.10 (Sim I 默认工作点, 饱和检查保证无截断)
+% 实验配置 (两条 FOU 路线分开认证, 均在凹聚合认证窗 λ>D_ν/2 内):
+%   Part A - uniform FOU: δ=0.10, λ=0.20 (Sim I 默认认证工作点 κ=D_ν/2λ<1)
 %   Part B - bell FOU:    δ=0.20, λ=0.50 (取 λ 使 κ(α_min)<1, 全网格在定理 2 认证区内;
 %             δ=0.20 与 Sim II 最大不确定性档一致, bell-FOU 在 δ≤0.25 时无截断)
 %
 % 输出:
-%   image/fig5_13_alpha_path.png    - (a) ||π*(α)-π*(1)||_1 路径; (b) 逐步增量 vs 理论界
-%   image/fig5_14_fou_aversion.png  - (a) log-似然比 vs α (实测/理论); (b) 均衡质量转移
-%   table/table5_4_alpha_path.csv   - α 网格 × {路径距离, 逐步斜率, ρ̄_var, 策略质量}
+%   image/fig5_13_theorem2.png      - 定理 2 实证 (竖排 2x1): (a) ||π*(α)-π*(1)||_1 路径(两 FOU, 2(i));
+%                                     (b) 均衡质量转移 (2(ii) FOU-aversion)
+%     (被删子图: 逐步斜率 vs Lipschitz 界、log-似然比线性律; 其数值仍打印并在正文报告)
+%   table/table5_4_alpha_path.csv   - α 网格 × {两 FOU 路径距离/斜率/ρ̄_var, 策略质量}
 
 clear; clc; close all;
 
 %% 全局字体设置
 set(0, 'DefaultAxesFontName', 'Times New Roman');
 set(0, 'DefaultTextFontName', 'Times New Roman');
+set(0, 'DefaultAxesFontSize', 12);
+set(0, 'DefaultTextFontSize', 12);
 
 %% 路径与输出目录
 script_dir = fileparts(mfilename('fullpath'));
@@ -46,7 +52,7 @@ num_alpha = length(alpha_grid);
 
 % Part A: uniform FOU 配置
 delta_uni  = 0.10;                   % μ ∈ [0.175, 0.85] ⊂ [δ, 1-δ], 无截断
-lambda_uni = params_base.lambda;     % 0.10 (Sim I 默认)
+lambda_uni = params_base.lambda;     % 0.20 (凹聚合认证窗默认工作点, κ=D_ν/2λ<1)
 
 % Part B: bell FOU 配置
 delta_bell  = 0.20;
@@ -80,27 +86,45 @@ fprintf('  uniform: κ = %.4f (λ=%.2f)  %s\n', kappa_uni, lambda_uni, ...
 fprintf('  bell:    κ(α=%.1f) = %.4f (λ=%.2f)  %s\n', alpha_min, kappa_bell, ...
     lambda_bell, pass_label(kappa_bell < 1));
 
-%% 2) Part A: uniform FOU 均衡路径 (预言: 逐点恒定)
-fprintf('\n--- Part A: uniform FOU (δ=%.2f, λ=%.2f), 预言 π*(α) ≡ π*(1) ---\n', ...
-    delta_uni, lambda_uni);
+%% 2) Part A: uniform FOU 均衡路径 (凹聚合下非恒定, 但 Lipschitz 正则)
+fprintf(['\n--- Part A: uniform FOU (δ=%.2f, λ=%.2f), 凹聚合下 ρ̄_var>0, ' ...
+    '路径非恒定但 Lipschitz 正则 ---\n'], delta_uni, lambda_uni);
 params_uni = params_base;
 params_uni.fou_modulation = false;
 params_uni.lambda = lambda_uni;
 
-pi_uni = cell(num_alpha, 1);
+pi_uni    = cell(num_alpha, 1);
+rho_var_u = zeros(num_alpha, 1);     % 各 α 均衡处的 ρ̄_var (uniform FOU)
 sat_ok_uni = true;
 for a_idx = 1:num_alpha
     [pi_uni{a_idx}, ~] = sec5_1_alpha_robust_solve(params_uni, delta_uni, ...
         theta, alpha_grid(a_idx));
-    % 饱和检查: 均匀 FOU 恒定性预言要求 μ ∈ [δ, 1-δ] (无截断)
+    % 凹聚合闭式 ρ=Σθ·2(1-μ)δ 要求 μ ∈ [δ, 1-δ] (无截断), 否则 clip 破坏闭式
     mu_nom = sec3_3_nominal_membership(pi_uni{a_idx}, params_uni);
     if min(mu_nom(:)) < delta_uni || max(mu_nom(:)) > 1 - delta_uni
         sat_ok_uni = false;
     end
+    rho_mat_u = per_strategy_rho(pi_uni{a_idx}, delta_uni, theta, params_uni);
+    rho_var_u(a_idx) = max(max(rho_mat_u, [], 2) - min(rho_mat_u, [], 2));
 end
 dist_to_one_uni = cellfun(@(p) sum(abs(p - pi_uni{end}), 'all'), pi_uni);
-fprintf('  max_α ||π*(α)-π*(1)||_1 = %.3e, 饱和检查 %s\n', ...
-    max(dist_to_one_uni), pass_label(sat_ok_uni));
+
+% uniform FOU: D_ν=D(θ) (与 α 无关), 逐步斜率与 Lipschitz 界 (定理 2(i))
+% kappa_uni 与上方第 1) 节同值 (D_theta/(2λ_uni)), 此处用于 Lipschitz 界计算
+rho_var_bar_uni = max(rho_var_u);
+slope_bound_uni = params_base.N * rho_var_bar_uni / ...
+    (2 * lambda_uni * (1 - kappa_uni));
+step_slope_uni = zeros(num_alpha - 1, 1);
+for a_idx = 1:num_alpha - 1
+    step_slope_uni(a_idx) = sum(abs(pi_uni{a_idx + 1} - pi_uni{a_idx}), 'all') / ...
+        (alpha_grid(a_idx + 1) - alpha_grid(a_idx));
+end
+fprintf('  ρ̄_var=%.4f (>0: 曲率诱导), max_α ||π*(α)-π*(1)||_1 = %.4f\n', ...
+    rho_var_bar_uni, max(dist_to_one_uni));
+fprintf('  Lipschitz 界 N·ρ̄_var/(2λ(1-κ))=%.4f, 实测 max 斜率=%.4f %s, 饱和检查 %s\n', ...
+    slope_bound_uni, max(step_slope_uni), ...
+    pass_label(all(step_slope_uni <= slope_bound_uni + 1e-9)), ...
+    pass_label(sat_ok_uni));
 
 %% 3) Part B: bell FOU 均衡路径 + 逐步 Lipschitz 比
 fprintf('\n--- Part B: bell FOU (δ=%.2f, λ=%.2f), 定理 2(i) 路径界 ---\n', ...
@@ -177,93 +201,63 @@ fprintf('  群体质量转移 (α: %.1f→%.1f): 高ρ策略 %d 质量 %.4f→%.
     alpha_grid(end), alpha_grid(1), j_hi_pop, mass_hi(end), mass_hi(1), ...
     j_lo_pop, mass_lo(end), mass_lo(1));
 
-%% 5) Fig 5-13: 均衡路径距离 + 逐步斜率 vs 理论界
-figure('Name', 'Equilibrium Path Regularity in Alpha', 'Position', [100,100,1150,460]);
+%% 5) Fig 5-13: 定理 2 实证 (单栏竖排 2x1; 原 4 子图筛为 2)
+%   (a) 均衡路径距离 (定理 2(i): 凹聚合下路径非退化、α-active);
+%   (b) 群体质量转移 (定理 2(ii): FOU-aversion, 高ρ→低ρ 策略)。
+%   被删两子图 (逐步斜率 vs Lipschitz 界、log-似然比线性律) 仍由上方计算并
+%   打印, 其关键数值 (斜率≤界; Δρ/λ 斜率) 在论文正文以一句话报告。
+figure('Name', 'Empirical Illustration of Theorem 2', 'Position', [100,80,480,640]);
 
-subplot(1, 2, 1);
+subplot(2, 1, 1);
 hold on;
 plot(alpha_grid, dist_to_one_uni, '-s', 'Color', [0.49 0.18 0.56], ...
-    'LineWidth', 2.0, 'MarkerSize', 9, 'MarkerFaceColor', [0.49 0.18 0.56]);
+    'LineWidth', 2.0, 'MarkerSize', 8, 'MarkerFaceColor', [0.49 0.18 0.56]);
 plot(alpha_grid, dist_to_one_bell, '-o', 'Color', [0 0.6 0], ...
-    'LineWidth', 2.2, 'MarkerSize', 9, 'MarkerFaceColor', [0 0.6 0]);
+    'LineWidth', 2.2, 'MarkerSize', 8, 'MarkerFaceColor', [0 0.6 0]);
 hold off;
 xlabel('Confidence Level \alpha', 'FontSize', 12);
 ylabel('||\pi^*(\alpha) - \pi^*(1)||_1', 'FontSize', 12);
-title('(a) Equilibrium Path Distance to Midpoint Game (\alpha=1)', 'FontSize', 12);
-legend({sprintf('Uniform FOU (\\delta=%.2f): \\rho_{var}=0 \\Rightarrow constant path', delta_uni), ...
+title('(a) Path distance to midpoint (\alpha=1)', 'FontSize', 12);
+legend({sprintf('Uniform FOU (\\delta=%.2f): \\rho_{var}=%.3f', delta_uni, rho_var_bar_uni), ...
     sprintf('Bell FOU (\\delta=%.2f): heterogeneous \\rho', delta_bell)}, ...
-    'Location', 'northeast', 'FontSize', 10);
+    'Location', 'northeast', 'FontSize', 9);
 grid on;
 
-subplot(1, 2, 2);
-hold on;
-mid_alpha = (alpha_grid(1:end-1) + alpha_grid(2:end)) / 2;
-bar(mid_alpha, step_slope, 0.6, 'FaceColor', [0 0.6 0], 'EdgeColor', 'k');
-yline(slope_bound, 'r--', 'LineWidth', 2.2, ...
-    'Label', sprintf('Theorem 2 bound N\\rho_{var}/(2\\lambda(1-\\kappa)) = %.3f', slope_bound), ...
-    'FontSize', 10, 'LabelHorizontalAlignment', 'left');
-hold off;
-xlabel('Interval Midpoint \alpha', 'FontSize', 12);
-ylabel('||\Delta\pi^*||_1 / |\Delta\alpha|', 'FontSize', 12);
-title('(b) Per-Step Path Slope vs Lipschitz Bound (Bell FOU)', 'FontSize', 12);
-grid on;
-exportgraphics(gcf, fullfile(img_dir, 'fig5_13_alpha_path.png'), 'Resolution', 300);
-% 矢量 PDF: ContentType=vector 按内容边界裁剪, 无整页留白边框
-exportgraphics(gcf, fullfile(img_dir, 'fig5_13_alpha_path.pdf'), ...
-    'ContentType', 'vector', 'BackgroundColor', 'white');
-fprintf('\n[图] %s\n', fullfile('image', 'fig5_13_alpha_path.png'));
-
-%% 6) Fig 5-14: FOU 规避似然比 + 群体质量转移
-figure('Name', 'FOU-Aversion Monotonicity', 'Position', [150,100,1150,460]);
-
-subplot(1, 2, 1);
-hold on;
-plot(alpha_grid, log_ratio, 'o', 'Color', [0 0.6 0], 'MarkerSize', 10, ...
-    'MarkerFaceColor', [0 0.6 0]);
-plot(alpha_grid, polyval([slope_theory, ...
-    mean(log_ratio - slope_theory * alpha_grid')], alpha_grid), 'r--', ...
-    'LineWidth', 2.0);
-hold off;
-xlabel('Confidence Level \alpha', 'FontSize', 12);
-ylabel(sprintf('log([BR]_{%d} / [BR]_{%d})', j_hi, j_lo), 'FontSize', 12);
-title('(a) Soft Best-Response Likelihood Ratio (Theorem 2(ii))', 'FontSize', 12);
-legend({'Measured', sprintf('Theory slope (\\rho_{j}-\\rho_{j''})/\\lambda = %.4f', ...
-    slope_theory)}, 'Location', 'northwest', 'FontSize', 10);
-grid on;
-
-subplot(1, 2, 2);
+subplot(2, 1, 2);
 hold on;
 strategy_names = params_base.S;
 colors_s = {[0 0.45 0.74], [0.85 0.33 0.10], [0.93 0.69 0.13], [0.49 0.18 0.56]};
 for j = 1:params_base.num_strategies
     plot(alpha_grid, mass_bell(:, j), '-o', 'Color', colors_s{j}, ...
-        'LineWidth', 1.8, 'MarkerSize', 7, 'MarkerFaceColor', colors_s{j});
+        'LineWidth', 1.8, 'MarkerSize', 6, 'MarkerFaceColor', colors_s{j});
 end
 hold off;
 xlabel('Confidence Level \alpha', 'FontSize', 12);
 ylabel('Population Strategy Mass', 'FontSize', 12);
-title(sprintf('(b) Mass Transfer: High-\\rho (%s) vs Low-\\rho (%s)', ...
+title(sprintf('(b) Mass transfer: %s \\rightarrow %s', ...
     strategy_names{j_hi_pop}, strategy_names{j_lo_pop}), 'FontSize', 12);
-legend(strategy_names, 'Location', 'east', 'FontSize', 10);
+legend(strategy_names, 'Location', 'east', 'FontSize', 9);
 grid on;
-exportgraphics(gcf, fullfile(img_dir, 'fig5_14_fou_aversion.png'), 'Resolution', 300);
-exportgraphics(gcf, fullfile(img_dir, 'fig5_14_fou_aversion.pdf'), ...
+apply_fig5_publication_style(gcf);
+exportgraphics(gcf, fullfile(img_dir, 'fig5_13_theorem2.png'), 'Resolution', 300);
+% 矢量 PDF: ContentType=vector 按内容边界裁剪, 无整页留白边框
+exportgraphics(gcf, fullfile(img_dir, 'fig5_13_theorem2.pdf'), ...
     'ContentType', 'vector', 'BackgroundColor', 'white');
-fprintf('[图] %s\n', fullfile('image', 'fig5_14_fou_aversion.png'));
+fprintf('\n[图] %s\n', fullfile('image', 'fig5_13_theorem2.png'));
 
 sync_named_figures(img_dir, fullfile(script_dir, '..', 'Latex'), {
-    'fig5_13_alpha_path.png';
-    'fig5_13_alpha_path.pdf';
-    'fig5_14_fou_aversion.png';
-    'fig5_14_fou_aversion.pdf';
+    'fig5_13_theorem2.png';
+    'fig5_13_theorem2.pdf';
     });
 
-%% 7) 表 5-4: α 网格汇总
-T = table(alpha_grid', dist_to_one_uni, dist_to_one_bell, ...
-    [NaN; step_slope], rho_var_g, mass_bell(:, 1), mass_bell(:, 2), ...
-    mass_bell(:, 3), mass_bell(:, 4), 'VariableNames', ...
-    {'alpha', 'DistToOne_Uniform', 'DistToOne_Bell', 'StepSlope_Bell', ...
-     'RhoVar_Bell', 'Mass_SC', 'Mass_SP', 'Mass_DC', 'Mass_DP'});
+%% 7) 表 5-4: α 网格汇总 (两条 FOU 路线的路径距离/逐步斜率/ρ̄_var)
+T = table(alpha_grid', dist_to_one_uni, [NaN; step_slope_uni], rho_var_u, ...
+    dist_to_one_bell, [NaN; step_slope], rho_var_g, ...
+    mass_bell(:, 1), mass_bell(:, 2), mass_bell(:, 3), mass_bell(:, 4), ...
+    'VariableNames', ...
+    {'alpha', 'DistToOne_Uniform', 'StepSlope_Uniform', 'RhoVar_Uniform', ...
+     'DistToOne_Bell', 'StepSlope_Bell', 'RhoVar_Bell', ...
+     'Mass_SC', 'Mass_SP', 'Mass_DC', 'Mass_DP'});
 csv_path = fullfile(tbl_dir, 'table5_4_alpha_path.csv');
 writetable(T, csv_path);
 fprintf('[表] %s\n', fullfile('table', 'table5_4_alpha_path.csv'));
@@ -271,10 +265,13 @@ fprintf('[表] %s\n', fullfile('table', 'table5_4_alpha_path.csv'));
 %% 8) 预期结论自动验证
 fprintf('\n===== 预期结论自动验证 =====\n');
 
-% (i) uniform FOU: 均衡路径逐点恒定 (ρ̄_var = 0 退化预言)
-pass_i = (max(dist_to_one_uni) < 1e-6) && sat_ok_uni;
-fprintf('(i) uniform FOU 路径恒定: max||π*(α)-π*(1)||_1 = %.3e (<1e-6) %s\n', ...
-    max(dist_to_one_uni), pass_label(pass_i));
+% (i) uniform FOU: 凹聚合下路径非退化 (ρ̄_var>0) 且 Lipschitz 正则 (斜率≤界)
+%     线性聚合下 uniform FOU 才恒定; 凹聚合曲率使其 α-active 但仍受定理 2(i) 约束。
+pass_i = (rho_var_bar_uni > 1e-6) && sat_ok_uni && ...
+    all(step_slope_uni <= slope_bound_uni + 1e-9);
+fprintf(['(i) uniform FOU 凹聚合非退化+Lipschitz 正则: ρ̄_var=%.4f (>0), ' ...
+    'max 斜率 %.4f ≤ 界 %.4f %s\n'], rho_var_bar_uni, max(step_slope_uni), ...
+    slope_bound_uni, pass_label(pass_i));
 
 % (ii) bell FOU: 逐步斜率全部低于定理 3 理论界
 pass_ii = all(step_slope <= slope_bound + 1e-9);
@@ -306,39 +303,17 @@ fprintf('\n===== 实验四完成 =====\n');
 function rho_mat = per_strategy_rho(pi_profile, delta, theta, params)
 % PER_STRATEGY_RHO  每个 agent 每个纯策略的不确定半径 ρ_{i,j} (定理 3 记号)
 %   ρ_{i,j} = ρ_i(δ_j, π_{-i}; θ): agent i 单边切换到纯策略 j 时的收益 FOU 半宽
-    N = params.N;
-    num_s = params.num_strategies;
-    rho_mat = zeros(N, num_s);
-    for j = 1:num_s
-        pi_temp = pi_profile;
-        pi_temp(:, :) = pi_profile;
-        pure = zeros(1, num_s); pure(j) = 1;
-        for i = 1:N
-            pi_dev = pi_temp;
-            pi_dev(i, :) = pure;
-            [mu_l, mu_u] = sec4_1_1_induced_membership(pi_dev, delta, params);
-            [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-            [~, rho] = sec4_2_1_crystallized_payoff(U_l, U_u);
-            rho_mat(i, j) = rho(i);
-        end
-    end
+    [~, ~, ~, rho_mat] = sec4_1_2_pure_interval_payoff_matrix( ...
+        pi_profile, delta, theta, params);
 end
 
 function nu_i = alpha_lower_payoff_fixed(pi_profile, delta, theta, params, ...
     agent_idx, alpha)
 % ALPHA_LOWER_PAYOFF_FIXED  固定 π_{-i} 下 agent i 的 α-cut 下界收益向量
 %   ν_{i,j}^α = Û_i(δ_j, π_{-i}) - (1-α)·ρ_i(δ_j, π_{-i})
-    num_s = params.num_strategies;
-    nu_i = zeros(num_s, 1);
-    for j = 1:num_s
-        pi_temp = pi_profile;
-        pure = zeros(1, num_s); pure(j) = 1;
-        pi_temp(agent_idx, :) = pure;
-        [mu_l, mu_u] = sec4_1_1_induced_membership(pi_temp, delta, params);
-        [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-        [U_hat, rho] = sec4_2_1_crystallized_payoff(U_l, U_u);
-        nu_i(j) = U_hat(agent_idx) - (1 - alpha) * rho(agent_idx);
-    end
+    [~, ~, U_hat, rho] = sec4_1_2_pure_interval_payoff_vector( ...
+        pi_profile, delta, theta, params, agent_idx);
+    nu_i = U_hat - (1 - alpha) * rho;
 end
 
 function s = pass_label(ok)

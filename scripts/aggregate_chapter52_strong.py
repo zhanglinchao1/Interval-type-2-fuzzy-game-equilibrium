@@ -14,6 +14,7 @@ METRICS = [
     "avg_p99_ms",
     "raw_uhat",
     "effective_uhat",
+    "realized_uhat",
     "task_completion_rate",
     "coop_success_rate",
     "malicious_participation_rate",
@@ -23,15 +24,14 @@ METRICS = [
     "avg_var_uhat",
 ]
 
-EXPOSURE = {
-    "Greedy": 1.0,
-    "FixedW": 0.7,
-    "Proposed": 0.0,
-    "NoIT2": 0.5,
-    "NoGov": 0.5,
-    "NoWFBRI": 0.6,
-    "NoRobust": 1.0,
-}
+# NOTE (integrity fix): an earlier revision derived "effective_uhat" by
+# subtracting a per-method hardcoded EXPOSURE coefficient from the measured
+# payoff (Proposed was assigned exposure 0.0, Greedy 1.0). That made the
+# headline payoff metric a function of the method's *name*, not of any
+# measurement, and inverted the true ordering. The dictionary and its
+# fallback are removed: all reported quantities are now direct simulation
+# measurements. "effective_uhat" equals the measured window-mean U-hat
+# (identical to raw_uhat by construction in Chapter52MetricsLogger).
 
 
 def mean(xs):
@@ -98,15 +98,17 @@ def run_record(run_dir, method, malicious_ratio):
     if not node_rows:
         return None
     raw = mean([f(r, "raw_uhat", f(r, "avg_uhat")) for r in node_rows])
-    rho = mean([f(r, "avg_rho") for r in node_rows])
+    # Measured only -- no method-name-based adjustment (see integrity note above).
     effective = mean([f(r, "effective_uhat", f(r, "avg_uhat")) for r in node_rows])
-    if effective == raw:
-        effective = max(0.0, raw - malicious_ratio * EXPOSURE.get(method, 0.5) * max(rho, 0.10))
+    # Realized payoff: cooperative-task windows failed by abnormal partners
+    # contribute 0 (threat-model realization); falls back to raw where absent.
+    realized = mean([f(r, "realized_uhat", f(r, "raw_uhat", f(r, "avg_uhat"))) for r in node_rows])
     return {
         "avg_pdr": mean([f(r, "pdr") for r in node_rows]),
         "avg_p99_ms": mean([f(r, "p99_latency_ms") for r in node_rows]),
         "raw_uhat": raw,
         "effective_uhat": effective,
+        "realized_uhat": realized,
         "task_completion_rate": mean([f(r, "task_completion_rate") for r in node_rows]),
         "coop_success_rate": mean([f(r, "coop_success_rate") for r in node_rows]),
         "malicious_participation_rate": mean([f(r, "malicious_participation_rate") for r in node_rows]),

@@ -89,20 +89,16 @@ order = ["Proposed", "NoIT2", "NoGov", "NoWFBRI", "NoRobust"]
 sorted_methods = sorted(by_method.keys(), key=lambda m: order.index(m) if m in order else 99)
 
 # chapter 5.2 长期收益惩罚（同 aggregate_exp1.py）
-EXPOSURE = {
-    "Proposed": 0.0,
-    "NoIT2":    0.5,
-    "NoGov":    0.5,
-    "NoWFBRI":  0.6,
-    "NoRobust": 1.0,
-}
+# NOTE (integrity fix): the former EXPOSURE dictionary assigned a payoff
+# penalty by METHOD NAME (Proposed always 0, Greedy always max), so the
+# "effective payoff" was fabricated rather than measured. It is removed;
+# effective_uhat now returns the measured payoff unchanged.
 MALICIOUS_RATIO = 0.10
 
 
 def effective_uhat(method, avg_uhat, avg_rho):
-    # 同 aggregate_exp1.py：方法 ρ=0 时用名义 0.10
-    rho_used = max(avg_rho, 0.10)
-    return max(0.0, avg_uhat - MALICIOUS_RATIO * EXPOSURE.get(method, 0.5) * rho_used)
+    # Measured only -- no method-name-based adjustment (see integrity note).
+    return avg_uhat
 
 
 # 收集每个 run 的 avg_rho

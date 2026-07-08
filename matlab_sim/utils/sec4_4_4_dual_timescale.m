@@ -18,9 +18,8 @@ function [x_hist, omega_hist, theta_hist, V_hist] = sec4_4_4_dual_timescale(...
 %       x_hist     - T×4 矩阵，策略分布演化
 %       omega_hist - T×K 矩阵，治理权重演化
 %       theta_hist - T×3 矩阵，收益层权重演化
-%       V_hist     - T×1 向量，联合 Lyapunov 势函数序列
-%                   V(x,ω) = V_x(x; θ(ω)) + c_Φ * Φ(ω)
-%                   用于第五章实验三验证 (4-42) 下降性
+%       V_hist     - T×1 终态参考能量序列。它用于轨迹可视化，不是 A5
+%                   中未知真实平衡点势函数的独立证明。
 
     T = params.T_evo;
     dt = params.dt_evo;
@@ -70,7 +69,7 @@ function [x_hist, omega_hist, theta_hist, V_hist] = sec4_4_4_dual_timescale(...
         omega_next = omega + varepsilon_g * dt * g;
         omega_next = sec3_2_project_simplex(omega_next);
 
-        % --- Lyapunov 势函数(4-42) ---
+        % --- 临时参考能量（循环后会以终态统一重算） ---
         V_x = local_kl_divergence(x_ref, x);
         Phi = 0.5 * sum((omega - omega_ref).^2);
         V_hist(t) = V_x + c_Phi * Phi;
@@ -79,7 +78,7 @@ function [x_hist, omega_hist, theta_hist, V_hist] = sec4_4_4_dual_timescale(...
         omega = omega_next;
     end
 
-    % 以最终状态作为参考点重算 V_hist，便于检验下降性
+    % 以最终状态作为参考点重算；该量仅是 terminal-reference diagnostic。
     x_final = x_hist(end, :)';
     omega_final = omega_hist(end, :)';
     for t = 1:T

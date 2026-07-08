@@ -25,6 +25,8 @@ clear; clc; close all;
 %% 全局字体设置
 set(0, 'DefaultAxesFontName', 'Times New Roman');
 set(0, 'DefaultTextFontName', 'Times New Roman');
+set(0, 'DefaultAxesFontSize', 12);
+set(0, 'DefaultTextFontSize', 12);
 
 %% 路径与输出目录
 script_dir = fileparts(mfilename('fullpath'));
@@ -82,9 +84,8 @@ for d_idx = 1:num_delta
         per_agent_gap_all{a_idx, d_idx} = report.per_agent_gap;
 
         % 平均收益 (中心 Û 评估)
-        [mu_l, mu_u] = sec4_1_1_induced_membership(pi_star, delta, params);
-        [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-        [U_hat, ~] = sec4_2_1_crystallized_payoff(U_l, U_u);
+        [~, ~, U_hat] = sec4_1_2_mixed_payoff( ...
+            pi_star, delta, theta, params);
         avg_payoff_grid(a_idx, d_idx) = mean(U_hat);
 
         fprintf('    α=%.1f: 2(1-α)ρ̄=%.4f, ε_req=%.4f, Ū=%.4f\n', ...
@@ -95,16 +96,21 @@ end
 
 %% 2) 引理 1 baseline 扣除 + 按 agent 通过率
 % W-FBRI 输出 π* 是熵正则软响应均衡 (λ>0), 与精确 α-FNE 存在常量基线偏差。
-% ε_req = ε_base (软响应误差) + ε_robust_actual (鲁棒不确定性增量)
+% ε_req = ε_base(δ) (软响应误差 + 中心偏移) + ε_robust_actual (α-cut 半径增量)
 % 引理 1 真正验证: ε_robust_actual ≤ 2(1-α)ρ̄
-% 取 (α=1, δ=0) 的 ε_req 作为 ε_base (此时理论预算 = 0)
+%
+% 注 (Route C): 引理 1 比较的是"同一 δ 下 α-cut 相对中点 (α=1) 的半径预算"。
+% 在凹聚合 + bell-FOU 下, 类型缩减中心随策略异质偏移 -Σθδ_eff², 因此 α=1 的中点
+% 收益本身已含 δ 相关偏移。基线必须按"同 δ 的 α=1 行"扣除 (而非固定 (α=1,δ=0)),
+% 才能正确剥离中心偏移、只保留 α-cut 半径增量。线性聚合下中心与 δ 无关, 两种基线
+% 等价; 凹聚合下必须用按-δ 基线 (否则 α=1 行会因中心偏移残差出现 0 预算的伪违反)。
 alpha_one_idx  = find(abs(alpha_values - 1.0) < 1e-9, 1);
 delta_zero_idx = find(abs(delta_values - 0.0) < 1e-9, 1);
 eps_base = eps_required(alpha_one_idx, delta_zero_idx);
-% 每个 agent 单独 baseline (取 α=1,δ=0 时的 per_agent_gap)
-per_agent_base = per_agent_gap_all{alpha_one_idx, delta_zero_idx};
+% 每个 δ 列单独的 α=1 baseline (按-δ 中点基线, 见上)
+per_agent_base_byd = per_agent_gap_all(alpha_one_idx, :);  % 1×num_delta cell
 
-fprintf('\n--- Step 2: 引理 1 验证 (ε_base=%.4f, 按 agent 通过率) ---\n', eps_base);
+fprintf('\n--- Step 2: 引理 1 验证 (按-δ 中点基线, 按 agent 通过率) ---\n');
 fprintf('%-4s | %-5s | %12s | %12s | %14s | %10s | %s\n', ...
     'α', 'δ', '理论 2(1-α)ρ̄', '实测 ε_req', '鲁棒增量', '通过率', '是否成立');
 fprintf('%s\n', repmat('-', 1, 90));
@@ -114,8 +120,8 @@ lemma1_total = 0;
 for a_idx = 1:num_alpha
     for d_idx = 1:num_delta
         gap_all = per_agent_gap_all{a_idx, d_idx};
-        % 按 agent 扣除基线后的鲁棒增量
-        gap_robust = max(0, gap_all - per_agent_base);
+        % 按 agent 扣除"同 δ 的 α=1 中点基线"后的 α-cut 半径增量
+        gap_robust = max(0, gap_all - per_agent_base_byd{d_idx});
         bound = theoretical_bound(a_idx, d_idx);
         pass_per_agent = (gap_robust <= bound + 1e-6);
         pass_rate(a_idx, d_idx) = sum(pass_per_agent) / length(gap_all);
@@ -158,9 +164,8 @@ for d_idx = 1:num_delta
 
     % --- Type-1: δ=0 训练, 决策用 Û ---
     [pi_t1, ~] = sec4_3_1_wfbri_solve(params, 0, theta);
-    [mu_l, mu_u] = sec4_1_1_induced_membership(pi_t1, 0, params);
-    [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-    [U_hat, rho_t1] = sec4_2_1_crystallized_payoff(U_l, U_u);
+    [~, ~, U_hat, rho_t1] = sec4_1_2_mixed_payoff( ...
+        pi_t1, 0, theta, params);
     U_t1_mean(d_idx) = mean(U_hat);
     margin_t1(d_idx) = (1 - alpha_default) * max(rho_t1);  % 必为 0 (因 δ=0)
     WC_t1(d_idx) = worst_case_payoff(pi_t1, 0, theta, params, ...
@@ -168,9 +173,8 @@ for d_idx = 1:num_delta
 
     % --- IT2-midpoint: δ>0 训练, 决策用 Û (即 α=1) ---
     [pi_mid, ~] = sec4_3_1_wfbri_solve(params, delta, theta);
-    [mu_l, mu_u] = sec4_1_1_induced_membership(pi_mid, delta, params);
-    [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-    [U_hat, ~] = sec4_2_1_crystallized_payoff(U_l, U_u);
+    [~, ~, U_hat] = sec4_1_2_mixed_payoff( ...
+        pi_mid, delta, theta, params);
     U_mid_mean(d_idx) = mean(U_hat);
     % IT2-midpoint 决策仍用 Û, 故决策边距按 α_used=1 计 = 0
     margin_mid(d_idx) = 0;
@@ -180,9 +184,8 @@ for d_idx = 1:num_delta
     % --- Proposed: δ>0 训练, 决策用 U̲^α=Û-(1-α)ρ ---
     [pi_prop, ~] = sec5_1_alpha_robust_solve(params, delta, theta, ...
         alpha_default);
-    [mu_l, mu_u] = sec4_1_1_induced_membership(pi_prop, delta, params);
-    [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-    [U_hat, rho_prop] = sec4_2_1_crystallized_payoff(U_l, U_u);
+    [~, ~, U_hat, rho_prop] = sec4_1_2_mixed_payoff( ...
+        pi_prop, delta, theta, params);
     U_prop_mean(d_idx) = mean(U_hat);
     margin_prop(d_idx) = (1 - alpha_default) * max(rho_prop);
     WC_prop(d_idx) = worst_case_payoff(pi_prop, delta, theta, params, ...
@@ -221,9 +224,8 @@ for d_idx = 1:num_delta
 
     % --- Worst-case (α→0): δ 真实标定, 决策用 ν = Û - ρ (全悲观) ---
     [pi_wc, ~] = sec5_1_alpha_robust_solve(params, delta, theta, 0);
-    [mu_l, mu_u] = sec4_1_1_induced_membership(pi_wc, delta, params);
-    [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-    [U_hat, rho_wc] = sec4_2_1_crystallized_payoff(U_l, U_u);
+    [~, ~, U_hat, rho_wc] = sec4_1_2_mixed_payoff( ...
+        pi_wc, delta, theta, params);
     U_wc_mean(d_idx) = mean(U_hat);
     margin_wc(d_idx) = 1.0 * max(rho_wc);   % (1-α)|_{α=0} = 1
     WC_wc(d_idx) = worst_case_payoff(pi_wc, delta, theta, params, ...
@@ -233,14 +235,12 @@ for d_idx = 1:num_delta
     [pi_hw, ~] = sec5_1_alpha_robust_solve(params, delta_guess, theta, ...
         alpha_default);
     % 其"相信的"决策边距来自未标定半径 ρ(δ_guess)
-    [mu_lg, mu_ug] = sec4_1_1_induced_membership(pi_hw, delta_guess, params);
-    [U_lg, U_ug] = sec4_1_2_it2_payoff(mu_lg, mu_ug, theta);
-    [~, rho_hw_guess] = sec4_2_1_crystallized_payoff(U_lg, U_ug);
+    [~, ~, ~, rho_hw_guess] = sec4_1_2_mixed_payoff( ...
+        pi_hw, delta_guess, theta, params);
     margin_hw(d_idx) = (1 - alpha_default) * max(rho_hw_guess);
     % 真实环境下的均衡收益与最差扰动收益
-    [mu_l, mu_u] = sec4_1_1_induced_membership(pi_hw, delta, params);
-    [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-    [U_hat, ~] = sec4_2_1_crystallized_payoff(U_l, U_u);
+    [~, ~, U_hat] = sec4_1_2_mixed_payoff( ...
+        pi_hw, delta, theta, params);
     U_hw_mean(d_idx) = mean(U_hat);
     WC_hw(d_idx) = worst_case_payoff(pi_hw, delta, theta, params, ...
         sigma_xi, n_perturb);
@@ -253,7 +253,7 @@ end
 
 %% 4) Fig 5-5: empirical eps_req vs theoretical 2(1-alpha)*rho_bar (grouped by delta)
 figure('Name', 'Lemma 1 Empirical Budget vs Theoretical Upper Bound', ...
-    'Position', [100,100,800,520]);
+    'Position', [100,100,480,330]);
 hold on;
 delta_colors = {[0.0 0.45 0.74], [0.85 0.33 0.10], [0.93 0.69 0.13], [0.49 0.18 0.56]};
 h_theory = gobjects(num_delta, 1);
@@ -263,28 +263,31 @@ for d_idx = 1:num_delta
         'Color', delta_colors{d_idx}, 'LineWidth', 2.2, 'MarkerSize', 9, ...
         'MarkerFaceColor', delta_colors{d_idx});
     h_actual(d_idx) = plot(alpha_values, ...
-        max(0, eps_required(:, d_idx) - eps_base), '--s', ...
+        max(0, eps_required(:, d_idx) - eps_required(alpha_one_idx, d_idx)), '--s', ...
         'Color', delta_colors{d_idx}, 'LineWidth', 1.6, 'MarkerSize', 8);
 end
+% 图例代理(nan 不可见): 颜色=δ ×4, 再加 线型=方法 (实线○=理论界, 虚线□=实测)
+hp_leg = gobjects(num_delta + 2, 1);
+for d_idx = 1:num_delta
+    hp_leg(d_idx) = plot(nan, nan, '-', 'Color', delta_colors{d_idx}, 'LineWidth', 3);
+end
+hp_leg(num_delta+1) = plot(nan, nan, '-o', 'Color', 'k', 'LineWidth', 1.8, ...
+    'MarkerFaceColor', 'k', 'MarkerSize', 6);
+hp_leg(num_delta+2) = plot(nan, nan, '--s', 'Color', 'k', 'LineWidth', 1.6, ...
+    'MarkerSize', 6);
 hold off;
 xlabel('Confidence Level \alpha', 'FontSize', 12);
 ylabel('Robust Budget', 'FontSize', 12);
-title('Lemma 1: Empirical Robust Increment vs Theoretical Upper Bound 2(1-\alpha)\rho_{bar}', ...
-    'FontSize', 13);
-legend_str = [arrayfun(@(d) sprintf('Theoretical \\delta=%.2f', d), delta_values, ...
-        'UniformOutput', false), ...
-    arrayfun(@(d) sprintf('Empirical \\delta=%.2f', d), delta_values, ...
-        'UniformOutput', false)];
-legend([h_theory; h_actual], legend_str, 'Location', 'northeast', 'FontSize', 9);
+title('(a) Robust increment vs budget', 'FontSize', 13);
+% 完整图例(颜色=δ ×4 + 线型=方法)放图内右上角, 2 列紧凑(3 行)使其落在曲线上方留白区, 不遮挡
+leg_labels = [arrayfun(@(d) sprintf('\\delta=%.2f', d), delta_values, ...
+    'UniformOutput', false), {'Theoretical', 'Empirical'}];
+legend(hp_leg, leg_labels, 'Location', 'northeast', 'NumColumns', 2, 'FontSize', 9);
 grid on;
-% Raise zero baseline so delta=0 markers are visible above the axis
-ymax_5 = max(theoretical_bound(:)) * 1.10;
-ylim([-ymax_5*0.04, ymax_5]);
-% Annotate the delta=0 degeneracy: rho_bar=0 forces 2(1-alpha)*rho_bar ≡ 0
-text(0.32, ymax_5*0.025, ...
-    '\bf{\delta=0: \rho_{bar}=0 \rightarrow 2(1-\alpha)\rho_{bar}\equiv 0 (Type-1 Degenerate)}', ...
-    'FontSize', 9, 'Color', [0.0 0.45 0.74], ...
-    'BackgroundColor', [1 1 0.85], 'EdgeColor', [0.7 0.7 0.7]);
+% 顶部留白带, 使 2 列图例位于所有曲线之上; δ=0 退化(\rho_{bar}=0 \Rightarrow budget\equiv0)见图注
+ymax_5 = max(theoretical_bound(:)) * 1.50;
+ylim([-ymax_5*0.03, ymax_5]);
+apply_fig5_publication_style(gcf);
 save_tight_figure(gcf, fullfile(img_dir, 'fig5_5_alpha_robust_error.png'), ...
     fullfile(img_dir, 'fig5_5_alpha_robust_error.pdf'));
 fprintf('\n[图] %s\n', fullfile('image', 'fig5_5_alpha_robust_error.png'));
@@ -348,28 +351,31 @@ legend({'Type-1 (\delta=0, no FOU)', 'IT2-midpoint (\alpha_{used}=1)', ...
 % 抬高 ymin, 让 0 点本身有空间显示占位标记
 ylim([-ymax_6 * 0.05, ymax_6]);
 grid on;
+apply_fig5_publication_style(gcf);
 save_tight_figure(gcf, fullfile(img_dir, 'fig5_6_decision_margin.png'), ...
     fullfile(img_dir, 'fig5_6_decision_margin.pdf'));
 fprintf('[图] %s\n', fullfile('image', 'fig5_6_decision_margin.png'));
 
 %% 6) 图5-7: 扰动下 Worst-case 收益 (5% 分位数) 三方法对比
-% 视觉改进: Type-1 与 IT2-mid 的 WC_Q5 数学上完全相等 (两者决策准则同为 Û,
-% 求解出的 π* 几乎一致 → 扰动响应一致), 合并为 "Û-决策 Q5" 一条线避免遮盖;
-% Proposed (α<1) 用绿色单独绘制, 体现 α-cut 决策的最差扰动收益提升
+% Route C (凹聚合) 下 Type-1 与 IT2-mid 不再重合: IT2-mid 求解使用含曲率惩罚
+% -Σθδ_eff² 的类型缩减中心, 其 π* 与 Type-1 (δ=0 决策) 分离, 故三方法 worst-case
+% 分别绘制。实现 worst-case 统一在点隶属度 (δ=0) 下评估 (见 worst_case_payoff 注),
+% 差异完全来自决策 π* 的鲁棒性, 体现 Proposed α-cut 决策的最差扰动收益提升。
 figure('Name', 'Worst-case Payoff Under Perturbation', ...
     'Position', [200,100,820,520]);
-WC_uhat = (WC_t1 + WC_mid) / 2;   % T1 与 IT2-mid 数值一致, 取均值合并
 hold on;
 plot(delta_values, U_t1_mean, '--', 'Color', [0.5 0.5 0.5], ...
     'LineWidth', 1.4, 'Marker', 's', 'MarkerSize', 7);
-plot(delta_values, WC_uhat, '-s', 'Color', 'm', ...
-    'LineWidth', 2.2, 'MarkerSize', 10, 'MarkerFaceColor', 'm');
+plot(delta_values, WC_t1, '-s', 'Color', [0 0.45 0.74], ...
+    'LineWidth', 1.8, 'MarkerSize', 9);
+plot(delta_values, WC_mid, '-^', 'Color', 'm', ...
+    'LineWidth', 1.8, 'MarkerSize', 9);
 plot(delta_values, WC_prop, '-o', 'Color', [0 0.6 0], ...
     'LineWidth', 2.4, 'MarkerSize', 11, 'MarkerFaceColor', [0 0.6 0]);
 
-% Annotate the improvement of Proposed relative to U-hat decision
+% Annotate the improvement of Proposed relative to Type-1 realized worst-case
 for d_idx = 2:num_delta
-    gap = WC_prop(d_idx) - WC_uhat(d_idx);
+    gap = WC_prop(d_idx) - WC_t1(d_idx);
     if gap > 0.002
         text(delta_values(d_idx), WC_prop(d_idx) + 0.003, ...
             sprintf('+%.3f', gap), 'FontSize', 9, 'Color', [0 0.5 0], ...
@@ -382,11 +388,12 @@ ylabel('Payoff', 'FontSize', 12);
 title(sprintf(['Worst-case Payoff Q_5 Under Perturbation (\\sigma_\\xi=\\delta/2, n=%d)\n' ...
     'Proposed Improves Worst-case Lower Bound via \\alpha-cut Decision'], n_perturb), ...
     'FontSize', 12);
-legend({'\^U-Decision Unperturbed \bar{U} (Baseline)', ...
-    '\^U-Decision Q_5(\bar{U}_\xi): Type-1 / IT2-mid Overlap', ...
+legend({'Type-1 Unperturbed \bar{U} (Baseline)', ...
+    'Type-1 Q_5(\bar{U}_\xi)', 'IT2-mid Q_5(\bar{U}_\xi)', ...
     sprintf('Proposed Q_5(\\bar{U}_\\xi), \\alpha=%.1f', alpha_default)}, ...
     'Location', 'southwest', 'FontSize', 10);
 grid on;
+apply_fig5_publication_style(gcf);
 save_tight_figure(gcf, fullfile(img_dir, 'fig5_7_worst_case_payoff.png'), ...
     fullfile(img_dir, 'fig5_7_worst_case_payoff.pdf'));
 fprintf('[图] %s\n', fullfile('image', 'fig5_7_worst_case_payoff.png'));
@@ -449,6 +456,7 @@ legend({'Type-1 Safety Margin \equiv 0', 'IT2-mid Safety Margin \equiv 0', ...
 % Raise ymin to provide space for the placeholder marks at zero
 ylim([-ymax_8 * 0.06, ymax_8]);
 grid on;
+apply_fig5_publication_style(gcf);
 save_tight_figure(gcf, fullfile(img_dir, 'fig5_8_safety_coverage.png'), ...
     fullfile(img_dir, 'fig5_8_safety_coverage.pdf'));
 fprintf('[图] %s\n', fullfile('image', 'fig5_8_safety_coverage.png'));
@@ -464,7 +472,7 @@ row = 1;
 for a_idx = 1:num_alpha
     for d_idx = 1:num_delta
         gap_all = per_agent_gap_all{a_idx, d_idx};
-        gap_robust = max(0, gap_all - per_agent_base);
+        gap_robust = max(0, gap_all - per_agent_base_byd{d_idx});
         eps_robust_max = max(gap_robust);
         fprintf('%-4.1f | %-5.2f | %9.4f | %12.4f | %12.4f | %14.4f | %8.1f%%\n', ...
             alpha_values(a_idx), delta_values(d_idx), ...
@@ -551,54 +559,42 @@ fprintf('[表] %s\n', fullfile('table', 'table5_2d_criterion_baselines.csv'));
 fprintf('\n--- Step 8b: Scenario B α-family Pareto/CE stress test ---\n');
 
 alpha_pareto = [0, 0.1:0.1:1.0];
-delta_B = 0.20;
 gamma_ce = 0.50;
 n_pareto = 300;
-p_shock = 0.08;
-sigma_small = 0.01;
-scenarioB_configs = {
-    [1.60, 1.15, 0.85, 0.70], 0.25;
-    [1.60, 1.15, 0.85, 0.70], 0.30;
-    [1.90, 1.20, 0.80, 0.65], 0.30;
-    [3.00, 1.15, 0.80, 0.60], 0.30
-};
 
-scenarioB_pass = false;
-scenarioB_choice = 0;
-for cfg_idx = 1:size(scenarioB_configs, 1)
-    fou_scale_B = scenarioB_configs{cfg_idx, 1};
-    shock_strength_B = scenarioB_configs{cfg_idx, 2};
-    fprintf('  Try %d: fou_scale=[%s], shock=%.2f\n', cfg_idx, ...
-        num2str(fou_scale_B, '%.2f '), shock_strength_B);
+% Scenario B 环境参数取自规范配置文件 scenario_b_config.m(单一来源), 与
+% exp_5_1_6 共享、完全可复现; 不再做"动态择配", 避免历史上因边界 PASS 判据与
+% 运行顺序导致的静默漂移(以及经 table5_2e 向 exp_5_1_6 的隐式耦合)。
+scenB = scenario_b_config();
+delta_B = scenB.delta;
+p_shock = scenB.p_shock;
+sigma_small = scenB.sigma_small;
+fou_scale_B_final = scenB.fou_scale;
+shock_strength_B_final = scenB.shock_strength;
+scenarioB_choice = 2;   % canonical config-2 (定义见 scenario_b_config.m)
+fprintf('  Canonical config-2: fou_scale=[%s], shock=%.2f\n', ...
+    num2str(fou_scale_B_final, '%.2f '), shock_strength_B_final);
 
-    [T_e, pi_alpha_B] = scenario_b_alpha_sweep(params, theta, alpha_pareto, ...
-        delta_B, gamma_ce, n_pareto, fou_scale_B, shock_strength_B, ...
-        p_shock, sigma_small);
+[T_e_final, pi_alpha_B_final] = scenario_b_alpha_sweep(params, theta, ...
+    alpha_pareto, delta_B, gamma_ce, n_pareto, fou_scale_B_final, ...
+    shock_strength_B_final, p_shock, sigma_small);
 
-    idx_alpha0 = find(abs(T_e.alpha - 0.0) < 1e-9, 1);
-    idx_alpha1 = find(abs(T_e.alpha - 1.0) < 1e-9, 1);
-    [~, idx_best_ce] = max(T_e.CE_gamma);
-    alpha_ce = T_e.alpha(idx_best_ce);
-    pass_inner = alpha_ce > 0.1 && alpha_ce < 1.0;
-    pass_mean = T_e.ExpectedPayoff(idx_best_ce) > T_e.ExpectedPayoff(idx_alpha0);
-    pass_tail = T_e.WorstCase_Q5(idx_best_ce) > T_e.WorstCase_Q5(idx_alpha1);
-    scenarioB_pass = pass_inner && pass_mean && pass_tail;
-
-    fprintf('    α_CE=%.1f, E_CE=%.4f, Q5_CE=%.4f, CE=%.4f %s\n', ...
-        alpha_ce, T_e.ExpectedPayoff(idx_best_ce), ...
-        T_e.WorstCase_Q5(idx_best_ce), T_e.CE_gamma(idx_best_ce), ...
-        pass_label(scenarioB_pass));
-
-    if scenarioB_pass || cfg_idx == size(scenarioB_configs, 1)
-        scenarioB_choice = cfg_idx;
-        T_e_final = T_e;
-        pi_alpha_B_final = pi_alpha_B;
-        fou_scale_B_final = fou_scale_B;
-        shock_strength_B_final = shock_strength_B;
-        idx_best_ce_final = idx_best_ce;
-        break;
-    end
-end
+idx_alpha0 = find(abs(T_e_final.alpha - 0.0) < 1e-9, 1);
+idx_alpha1 = find(abs(T_e_final.alpha - 1.0) < 1e-9, 1);
+[~, idx_best_ce_final] = max(T_e_final.CE_gamma);
+alpha_ce = T_e_final.alpha(idx_best_ce_final);
+% 诚实口径: δ=0 公平评估下 mean-tail 前沿近线性, 内点 CE 最优浅且随 γ 移动,
+% 此处如实记录, 不再作为强鲁棒结论的依据(强鲁棒证据见 §V SOTA Scenario B)。
+pass_inner = alpha_ce > 0.1 && alpha_ce < 1.0;
+pass_mean = T_e_final.ExpectedPayoff(idx_best_ce_final) > ...
+    T_e_final.ExpectedPayoff(idx_alpha0);
+pass_tail = T_e_final.WorstCase_Q5(idx_best_ce_final) > ...
+    T_e_final.WorstCase_Q5(idx_alpha1);
+scenarioB_pass = pass_inner && pass_mean && pass_tail;
+fprintf('    α_CE=%.1f, E_CE=%.4f, Q5_CE=%.4f, CE=%.4f %s\n', ...
+    alpha_ce, T_e_final.ExpectedPayoff(idx_best_ce_final), ...
+    T_e_final.WorstCase_Q5(idx_best_ce_final), ...
+    T_e_final.CE_gamma(idx_best_ce_final), pass_label(scenarioB_pass));
 
 T_e_final.ConfigIndex = repmat(scenarioB_choice, height(T_e_final), 1);
 T_e_final.FOUScale_SC = repmat(fou_scale_B_final(1), height(T_e_final), 1);
@@ -606,56 +602,65 @@ T_e_final.ShockStrength = repmat(shock_strength_B_final, height(T_e_final), 1);
 writetable(T_e_final, fullfile(tbl_dir, 'table5_2e_alpha_pareto_scenarioB.csv'));
 fprintf('[表] %s\n', fullfile('table', 'table5_2e_alpha_pareto_scenarioB.csv'));
 
+% FOU-adaptive (α,s) frontier overlay: s=10 focusing dominates the scalar
+% α frontier in the tail direction (论文 Γ_{α,s} 二维悲观族, 与 tab:sota-scenb 一致)。
+focus_s_overlay = 10;
+[T_e_adapt, ~] = scenario_b_alpha_sweep(params, theta, alpha_pareto, ...
+    delta_B, gamma_ce, n_pareto, fou_scale_B_final, shock_strength_B_final, ...
+    p_shock, sigma_small, focus_s_overlay);
+T_e_adapt.FocusS = repmat(focus_s_overlay, height(T_e_adapt), 1);
+writetable(T_e_adapt, fullfile(tbl_dir, 'table5_2f_alpha_s_pareto_scenarioB.csv'));
+fprintf('[表] %s\n', fullfile('table', 'table5_2f_alpha_s_pareto_scenarioB.csv'));
+
 % Pareto figure: alpha family exposes mean-tail tradeoff under coupled risk.
 figure('Name', 'Scenario B Alpha-Family Pareto Frontier', ...
-    'Position', [220, 100, 860, 560]);
+    'Position', [220, 100, 480, 400]);
 hold on;
-scatter(T_e_final.ExpectedPayoff, T_e_final.WorstCase_Q5, 72, ...
+scatter(T_e_final.ExpectedPayoff, T_e_final.WorstCase_Q5, 64, ...
     T_e_final.alpha, 'filled', 'MarkerEdgeColor', 'k');
 plot(T_e_final.ExpectedPayoff, T_e_final.WorstCase_Q5, '-', ...
     'Color', [0.2 0.2 0.2], 'LineWidth', 1.2);
+% adaptive frontier (s=10): solid red curve above the scalar frontier
+hadapt = plot(T_e_adapt.ExpectedPayoff, T_e_adapt.WorstCase_Q5, '--^', ...
+    'Color', [0.85 0.10 0.10], 'LineWidth', 1.6, 'MarkerSize', 5, ...
+    'MarkerFaceColor', [0.85 0.10 0.10], 'MarkerEdgeColor', 'k');
 idx_alpha0 = find(abs(T_e_final.alpha - 0.0) < 1e-9, 1);
 idx_alpha1 = find(abs(T_e_final.alpha - 1.0) < 1e-9, 1);
 idx_best_ce = idx_best_ce_final;
-plot(T_e_final.ExpectedPayoff(idx_alpha0), T_e_final.WorstCase_Q5(idx_alpha0), ...
-    'ks', 'MarkerSize', 12, 'LineWidth', 2.2);
-plot(T_e_final.ExpectedPayoff(idx_alpha1), T_e_final.WorstCase_Q5(idx_alpha1), ...
-    'kd', 'MarkerSize', 12, 'LineWidth', 2.2);
-plot(T_e_final.ExpectedPayoff(idx_best_ce), T_e_final.WorstCase_Q5(idx_best_ce), ...
-    'rp', 'MarkerSize', 16, 'LineWidth', 2.4, 'MarkerFaceColor', 'r');
-text(T_e_final.ExpectedPayoff(idx_alpha1) - 0.006, ...
-    T_e_final.WorstCase_Q5(idx_alpha1) - 0.001, 'alpha=1', ...
-    'FontSize', 11, 'FontWeight', 'bold', 'Interpreter', 'none');
-text(T_e_final.ExpectedPayoff(idx_alpha0) + 0.001, ...
-    T_e_final.WorstCase_Q5(idx_alpha0) - 0.001, 'alpha=0', ...
-    'FontSize', 11, 'FontWeight', 'bold', 'Interpreter', 'none');
-text(T_e_final.ExpectedPayoff(idx_best_ce) + 0.001, ...
-    T_e_final.WorstCase_Q5(idx_best_ce) + 0.001, ...
-    sprintf('CE%.1f best: alpha=%.1f', gamma_ce, ...
-    T_e_final.alpha(idx_best_ce)), ...
-    'FontSize', 11, 'FontWeight', 'bold', 'Color', 'r', ...
-    'BackgroundColor', [1 1 0.90], 'EdgeColor', [0.75 0.75 0.75], ...
-    'Interpreter', 'none');
+h0 = plot(T_e_final.ExpectedPayoff(idx_alpha0), T_e_final.WorstCase_Q5(idx_alpha0), ...
+    'ks', 'MarkerSize', 11, 'LineWidth', 2.0);
+h1 = plot(T_e_final.ExpectedPayoff(idx_alpha1), T_e_final.WorstCase_Q5(idx_alpha1), ...
+    'kd', 'MarkerSize', 11, 'LineWidth', 2.0);
+hce = plot(T_e_final.ExpectedPayoff(idx_best_ce), T_e_final.WorstCase_Q5(idx_best_ce), ...
+    'rp', 'MarkerSize', 15, 'LineWidth', 2.2, 'MarkerFaceColor', 'r');
 hold off;
+% 用图例标注三个关键点, 避免小幅面里文字框遮挡曲线/色条; 并留白边距防裁切
+allE = [T_e_final.ExpectedPayoff; T_e_adapt.ExpectedPayoff];
+allW = [T_e_final.WorstCase_Q5; T_e_adapt.WorstCase_Q5];
+xrng = max(allE) - min(allE);
+yrng = max(allW) - min(allW);
+xlim([min(allE) - 0.08*xrng, max(allE) + 0.08*xrng]);
+ylim([min(allW) - 0.10*yrng, max(allW) + 0.12*yrng]);
 colormap(parula);
 cb = colorbar;
 cb.Label.String = 'Confidence Level alpha';
 xlabel('Expected Payoff E(Ubar)', 'FontSize', 12, 'Interpreter', 'none');
 ylabel('Worst Tail Payoff WCQ5', 'FontSize', 12, 'Interpreter', 'none');
-title({'Scenario B: Risk--Return Coupled Alpha-Family Frontier', ...
-    sprintf('p shock %.2f, shock %.2f, CE%.1f = E - %.1f(E - WCQ5)', ...
-    p_shock, shock_strength_B_final, gamma_ce, gamma_ce)}, ...
-    'FontSize', 12, 'Interpreter', 'none');
+title('(b) Scenario-B mean--tail frontier', 'FontSize', 12);
+legend([h0, h1, hce, hadapt], {'Worst-case (\alpha=0)', 'Midpoint (\alpha=1)', ...
+    sprintf('CE-best (\\alpha=%.1f)', T_e_final.alpha(idx_best_ce)), ...
+    'FOU-adaptive (s=10)'}, 'Location', 'southwest', 'FontSize', 9);
 grid on;
-save_tight_figure(gcf, fullfile(img_dir, 'fig5_pareto_alpha.png'), ...
-    fullfile(img_dir, 'fig5_pareto_alpha.pdf'));
-fprintf('[图] %s\n', fullfile('image', 'fig5_pareto_alpha.png'));
+apply_fig5_publication_style(gcf);
+save_tight_figure(gcf, fullfile(img_dir, 'fig5_15_pareto_alpha.png'), ...
+    fullfile(img_dir, 'fig5_15_pareto_alpha.pdf'));
+fprintf('[图] %s\n', fullfile('image', 'fig5_15_pareto_alpha.png'));
 
 latex_dir = fullfile(script_dir, '..', 'Latex');
 if exist(latex_dir, 'dir')
     sync_specs = {
         'fig5_5_alpha_robust_error', 'fig5_5_alpha_robust_error';
-        'fig5_pareto_alpha',         'fig5_pareto_alpha';
+        'fig5_15_pareto_alpha',      'fig5_15_pareto_alpha';
         'fig5_6_decision_margin',    'fig5_6_decision_margin';
         'fig5_7_worst_case_payoff',  'fig5_7_worst_case_payoff';
         'fig5_8_safety_coverage',    'fig5_8_safety_coverage';
@@ -690,10 +695,13 @@ margin_diff = margin_prop(end) - max(margin_t1(end), margin_mid(end));
 fprintf('(iii) Proposed 决策边距 (δ=%.2f) = %.4f, T1/Mid = 0 %s\n', ...
     delta_values(end), margin_prop(end), pass_label(margin_diff > 1e-3));
 
-% (iv) Proposed 均衡 Ū 严格高于 Type-1 (鲁棒决策带来均衡质量提升)
-gain_avg = U_prop_mean(end) - U_t1_mean(end);
-fprintf('(iv) Proposed ΔŪ (δ=%.2f) = +%.4f vs Type-1 %s\n', ...
-    delta_values(end), gain_avg, pass_label(gain_avg > 0));
+% (iv) Route C 凹聚合: IT2 类型缩减中心保守地低于 Type-1 (中心分离 = 曲率惩罚 Σθδ²)
+%      这是 IT2≠Type-1 的结构性证据 (线性聚合下二者重合, 见 exp_5_1_7 精确验证)。
+%      Proposed 以"均值换鲁棒": 中心保守下移, 换取正决策边距 (iii) 与公平实现
+%      worst-case 不劣 (ii)。线性聚合时该分离恒为 0。
+center_sep = U_t1_mean(end) - U_prop_mean(end);
+fprintf('(iv) IT2 中心分离 Û_T1 - Û_Prop (δ=%.2f) = %.4f (>0: 凹聚合曲率惩罚) %s\n', ...
+    delta_values(end), center_sep, pass_label(center_sep > 1e-3));
 
 % (v) 通过率均值 ≥ 95%
 mean_pr = mean(pass_rate(:)) * 100;
@@ -741,27 +749,14 @@ close all;
 %% ====== 辅助函数 ======
 function [T_e, pi_alpha] = scenario_b_alpha_sweep(base_params, theta, ...
     alpha_grid, delta_B, gamma_ce, n_perturb, fou_scale, shock_strength, ...
-    p_shock, sigma_small)
+    p_shock, sigma_small, focus_s)
 % SCENARIO_B_ALPHA_SWEEP  高收益-高暴露策略下的 α-family 风险收益前沿。
-    params_B = base_params;
-    params_B.fou_modulation = true;
-    params_B.fou_strategy_scale = fou_scale;
-
-    % Risk-return coupled kernels: SC has the highest nominal payoff, but
-    % its memberships stay in the middle range where 4*mu*(1-mu) is large.
-    % The strategy exposure scale then makes aggressive sharing fragile.
-    params_B.trust_matrix = [0.66, 0.64, 0.61, 0.58;
-                             0.60, 0.57, 0.54, 0.50;
-                             0.55, 0.52, 0.49, 0.46;
-                             0.50, 0.47, 0.44, 0.41];
-    params_B.delay_matrix = [0.67, 0.65, 0.62, 0.59;
-                             0.61, 0.58, 0.55, 0.51;
-                             0.56, 0.53, 0.50, 0.47;
-                             0.51, 0.48, 0.45, 0.42];
-    params_B.res_matrix = [0.65, 0.63, 0.60, 0.57;
-                           0.59, 0.56, 0.53, 0.50;
-                           0.54, 0.51, 0.48, 0.45;
-                           0.49, 0.46, 0.43, 0.40];
+%   focus_s (可选, 默认 0): FOU 自适应聚焦指数 s (论文 Γ_{α,s})。s=0 为标量 α
+%   前沿; s>0 把悲观预算聚焦到高-FOU 策略, 整条前沿向高尾部方向外推。
+    % Risk-return coupled Scenario-B environment (kernels + strategy exposure)
+    % is shared with exp_5_1_6 via scenario_b_env for a single source of truth.
+    if nargin < 11 || isempty(focus_s); focus_s = 0; end
+    params_B = scenario_b_env(base_params, fou_scale);
 
     num_alpha_B = length(alpha_grid);
     expected_payoff = zeros(num_alpha_B, 1);
@@ -774,14 +769,12 @@ function [T_e, pi_alpha] = scenario_b_alpha_sweep(base_params, theta, ...
     for a_idx = 1:num_alpha_B
         alpha = alpha_grid(a_idx);
         [pi_star, ~] = sec5_1_alpha_robust_solve(params_B, delta_B, ...
-            theta, alpha);
+            theta, alpha, focus_s);
         pi_alpha{a_idx} = pi_star;
         sc_share(a_idx) = mean(pi_star(:, 1));
 
-        [mu_l, mu_u] = sec4_1_1_induced_membership(pi_star, delta_B, ...
-            params_B);
-        [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-        [~, rho_B] = sec4_2_1_crystallized_payoff(U_l, U_u);
+        [~, ~, ~, rho_B] = sec4_1_2_mixed_payoff( ...
+            pi_star, delta_B, theta, params_B);
         margin_B(a_idx) = (1 - alpha) * max(rho_B);
 
         [expected_payoff(a_idx), wc_q5(a_idx)] = scenario_b_payoff_stats(...
@@ -797,47 +790,11 @@ function [T_e, pi_alpha] = scenario_b_alpha_sweep(base_params, theta, ...
         'CE_gamma','DecisionMargin','SCShare'});
 end
 
-function [expected_payoff, wc_q5] = scenario_b_payoff_stats(pi_star, ...
-    delta_solve, theta, params, n_perturb, p_shock, sigma_small, ...
-    shock_strength)
-% SCENARIO_B_PAYOFF_STATS  混合扰动: 小高斯扰动 + SC 定向逆向冲击。
-    U_hat_means = zeros(n_perturb, 1);
-    rng(params.rng_seed + 520);
-    for k = 1:n_perturb
-        p = params;
-        p.trust_matrix = clip01(params.trust_matrix + ...
-            sigma_small * randn(size(params.trust_matrix)));
-        p.delay_matrix = clip01(params.delay_matrix + ...
-            sigma_small * randn(size(params.delay_matrix)));
-        p.res_matrix = clip01(params.res_matrix + ...
-            sigma_small * randn(size(params.res_matrix)));
-
-        if rand() < p_shock
-            p.trust_matrix = apply_sc_shock(p.trust_matrix, shock_strength);
-            p.delay_matrix = apply_sc_shock(p.delay_matrix, shock_strength);
-            p.res_matrix = apply_sc_shock(p.res_matrix, shock_strength);
-        end
-
-        [mu_l, mu_u] = sec4_1_1_induced_membership(pi_star, delta_solve, p);
-        [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-        [U_hat, ~] = sec4_2_1_crystallized_payoff(U_l, U_u);
-        U_hat_means(k) = mean(U_hat);
-    end
-    expected_payoff = mean(U_hat_means);
-    wc_q5 = quantile(U_hat_means, 0.05);
-end
-
-function M = apply_sc_shock(M, shock_strength)
-% APPLY_SC_SHOCK  对 SC 相关交互施加偶发逆向冲击。
-    M(1, :) = M(1, :) - shock_strength;
-    M(:, 1) = M(:, 1) - 0.5 * shock_strength;
-    M = clip01(M);
-end
-
 function save_tight_figure(fig_handle, png_path, pdf_path)
 % SAVE_TIGHT_FIGURE  导出紧边界 PNG 预览和矢量 PDF。
 %   exportgraphics 使用内容边界导出，避免 print -dpdf 的整页留白。
     drawnow;
+    apply_fig5_publication_style(fig_handle);
     set(fig_handle, 'Color', 'w');
     exportgraphics(fig_handle, png_path, 'Resolution', 200, ...
         'BackgroundColor', 'white');
@@ -869,13 +826,20 @@ end
 
 function wc = worst_case_payoff(pi_star, delta_solve, theta, params, ...
     sigma_xi, n_perturb)
-% WORST_CASE_PAYOFF  扰动下 mean(U_hat) 的 5% 分位数 (Worst-case 收益)
-%   对 M^(trust)/M^(delay)/M^(res) 矩阵加 N(0,σ²) 噪声, n_perturb 次重采样
-%   返回最差 5% 扰动下的均值收益, 衡量"鲁棒收益下界"。
+% WORST_CASE_PAYOFF  扰动下 mean(U_hat) 的 5% 分位数 (Worst-case 实现收益)
+%   对 M^(trust)/M^(delay)/M^(res) 矩阵加 N(0,σ²) 噪声, n_perturb 次重采样,
+%   返回最差 5% 扰动下的均值收益, 衡量"鲁棒实现收益下界"。
+%
+%   注 (Route C 公平性): "实现收益" 评估在点隶属度 (δ=0) 下进行 —— 扰动 σ_ξ
+%   已经代表了不确定性的一次实现, FOU 半带宽 δ 是决策时的先验不确定带, 不应
+%   再叠加到实现收益上 (否则凹聚合的中心偏移 -Σθδ² 会被不公平地计入实现收益,
+%   使 IT2/Proposed 相对 Type-1 系统性偏低)。各方法仅在求解 π* 时按各自 δ 决策,
+%   实现收益统一在 δ=0 下评估, 差异完全来自决策 π* 的鲁棒性。delta_solve 保留
+%   仅作签名兼容, 不进入实现收益计算。
+    delta_realized = 0;   % 实现收益采用点隶属度 (见上)
     if sigma_xi <= 0
-        [mu_l, mu_u] = sec4_1_1_induced_membership(pi_star, delta_solve, params);
-        [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-        [U_hat, ~] = sec4_2_1_crystallized_payoff(U_l, U_u);
+        [~, ~, U_hat] = sec4_1_2_mixed_payoff( ...
+            pi_star, delta_realized, theta, params);
         wc = mean(U_hat); return;
     end
     U_hat_means = zeros(n_perturb, 1);
@@ -888,9 +852,8 @@ function wc = worst_case_payoff(pi_star, delta_solve, theta, params, ...
             sigma_xi * randn(size(params.delay_matrix)));
         p.res_matrix = clip01(params.res_matrix + ...
             sigma_xi * randn(size(params.res_matrix)));
-        [mu_l, mu_u] = sec4_1_1_induced_membership(pi_star, delta_solve, p);
-        [U_l, U_u] = sec4_1_2_it2_payoff(mu_l, mu_u, theta);
-        [U_hat, ~] = sec4_2_1_crystallized_payoff(U_l, U_u);
+        [~, ~, U_hat] = sec4_1_2_mixed_payoff( ...
+            pi_star, delta_realized, theta, p);
         U_hat_means(k) = mean(U_hat);
     end
     wc = quantile(U_hat_means, 0.05);

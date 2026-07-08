@@ -117,25 +117,45 @@ def analyze_exp1(lines, exp1):
               "complete 3 methods x 4 densities x 10 seeds" if not missing and not low_seed
               else f"missing={missing}; low_seed={low_seed}")
 
-    if all(m in exp1 for m in ["Proposed", "FixedW"]):
-        gaps = []
-        for nv in sorted(set(exp1["Proposed"]) & set(exp1["FixedW"])):
-            prop = f(exp1["Proposed"][nv], "effective_uhat_mean")
-            fixed = f(exp1["FixedW"][nv], "effective_uhat_mean")
-            gaps.append((prop - fixed) / max(fixed, 1e-9))
+    # Checks track the claims actually made in the paper's Section V-B after
+    # the integrity fix (measured payoff only; no method-name-based metric).
+    if all(m in exp1 for m in ["Proposed", "Greedy"]):
+        nvs = sorted(set(exp1["Proposed"]) & set(exp1["Greedy"]))
+        gaps, pvals = [], []
+        for nv in nvs:
+            prop = f(exp1["Proposed"][nv], "realized_uhat_mean")
+            greedy = f(exp1["Greedy"][nv], "realized_uhat_mean")
+            gaps.append((prop - greedy) / max(greedy, 1e-9))
+            pvals.append(p(exp1["Greedy"][nv], "realized_uhat"))
+        holm = sorted(range(len(pvals)), key=lambda i: pvals[i])
+        n_sig = 0
+        for rank, i in enumerate(holm):
+            if pvals[i] * (len(pvals) - rank) <= 0.05:
+                n_sig += 1
+            else:
+                break
         avg_gap = sum(gaps) / len(gaps) if gaps else 0.0
-        add_check(lines, "Effective payoff: Proposed vs FixedW",
-                  verdict(avg_gap >= 0.02), f"avg relative gap={pct(avg_gap)}; expected >=2%")
+        add_check(lines, "Realized payoff: Proposed vs Greedy (threat model)",
+                  verdict(all(g > 0 for g in gaps) and n_sig == len(pvals)),
+                  f"avg relative gap={pct(avg_gap)}, positive at {sum(g > 0 for g in gaps)}/{len(gaps)} densities, "
+                  f"Holm-significant at {n_sig}/{len(pvals)}; paper claims +4.3% to +6.8%, significant at 4/4")
 
     for nv in [150, 200]:
         if "Proposed" in exp1 and "Greedy" in exp1 and nv in exp1["Proposed"] and nv in exp1["Greedy"]:
             task = f(exp1["Proposed"][nv], "task_completion_rate_mean")
-            prop_u = f(exp1["Proposed"][nv], "effective_uhat_mean")
-            greedy_u = f(exp1["Greedy"][nv], "effective_uhat_mean")
-            pv = p(exp1["Greedy"][nv], "effective_uhat")
-            add_check(lines, f"High-density task/payoff Nv={nv}",
-                      verdict(task >= 0.95 and prop_u >= greedy_u),
-                      f"task={task:.4f}, Proposed Ueff={prop_u:.4f}, Greedy Ueff={greedy_u:.4f}, p={pv:.4f}; expected task>=0.95 and Proposed Ueff>=Greedy")
+            var_p = f(exp1["Proposed"][nv], "avg_var_uhat_mean")
+            var_g = f(exp1["Greedy"][nv], "avg_var_uhat_mean")
+            pv = p(exp1["Greedy"][nv], "avg_var_uhat")
+            viol = f(exp1["Proposed"][nv], "epsilon_violation_rate_mean")
+            task_g = f(exp1["Greedy"][nv], "task_completion_rate_mean")
+            ptask = p(exp1["Greedy"][nv], "task_completion_rate")
+            add_check(lines, f"High-density variance/certificate Nv={nv}",
+                      verdict(var_p < var_g and pv <= 0.05 and viol <= 0.05
+                              and task > task_g and ptask <= 0.05),
+                      f"var Proposed={var_p:.6f} < Greedy={var_g:.6f} (p={pv:.2e}), "
+                      f"violation={viol:.4f}<=5%, task Proposed={task:.4f} > Greedy={task_g:.4f} "
+                      f"(p={ptask:.2e}); under the realized threat model cooperative windows can fail, "
+                      f"so completion is compared across methods rather than to an absolute threshold")
 
     if "Proposed" in exp1:
         nvs = sorted(exp1["Proposed"])
@@ -145,7 +165,7 @@ def analyze_exp1(lines, exp1):
                   "Proposed p99 by Nv: " + ", ".join(f"Nv{nv}={val:.3f}ms" for nv, val in zip(nvs, p99s)))
 
     lines.append("")
-    lines.append("Expectation source: `code/paper/chapter5.2.md` describes density adaptation through latency, PDR, task completion, and payoff; the hard check keeps task completion viable and uses effective payoff for the Greedy comparison.")
+    lines.append("Expectation source: the revised Section V-B claims under the realized threat model (20% abnormal vehicles behaviorally realized; realized payoff = task-outcome-weighted measurement): Proposed > Greedy on realized payoff at every density; variance/certificate advantages retained.")
     lines.append("")
 
 
@@ -174,18 +194,29 @@ def analyze_exp2(lines, exp2):
                   f"epsilon violation Proposed={full:.4f}, NoRobust={norob:.4f}, reduction={pct(drop)}; expected >=30%")
 
     if "Proposed" in exp2 and "NoGov" in exp2:
-        full = f(exp2["Proposed"], "effective_uhat_mean")
-        nogov = f(exp2["NoGov"], "effective_uhat_mean")
-        pv = p(exp2["NoGov"], "effective_uhat")
-        add_check(lines, "Governance effect",
-                  verdict(full >= nogov and pv <= 0.05),
-                  f"effective payoff Proposed={full:.4f}, NoGov={nogov:.4f}, p={pv:.4f}; expected Proposed>=NoGov")
+        full = f(exp2["Proposed"], "realized_uhat_mean")
+        nogov = f(exp2["NoGov"], "realized_uhat_mean")
+        pv = p(exp2["NoGov"], "realized_uhat")
+        viol_full = f(exp2["Proposed"], "epsilon_violation_rate_mean")
+        viol_nogov = f(exp2["NoGov"], "epsilon_violation_rate_mean")
+        add_check(lines, "Governance payoff-neutrality + certificate",
+                  verdict(pv > 0.05 and viol_full <= 0.05 and viol_nogov <= 0.05),
+                  f"measured payoff Full={full:.4f} vs NoGov={nogov:.4f} (p={pv:.4f}, paper claims payoff-neutral), "
+                  f"violations Full={viol_full:.4f}/NoGov={viol_nogov:.4f}<=5%")
         full_mal = f(exp2["Proposed"], "malicious_participation_rate_mean")
         nogov_mal = f(exp2["NoGov"], "malicious_participation_rate_mean")
         drop = (nogov_mal - full_mal) / max(nogov_mal, 1e-9)
         add_check(lines, "Malicious participation observation",
                   verdict(drop >= 0.0, warn=True),
                   f"Proposed={full_mal:.4f}, NoGov={nogov_mal:.4f}, reduction={pct(drop)}; retained as observational because this implementation's governance effect appears in payoff")
+
+    if "Proposed" in exp2 and "NoWFBRI" in exp2:
+        full = f(exp2["Proposed"], "realized_uhat_mean")
+        nowf = f(exp2["NoWFBRI"], "realized_uhat_mean")
+        pv = p(exp2["NoWFBRI"], "realized_uhat")
+        add_check(lines, "W-FBRI damping realized-payoff effect",
+                  verdict(nowf < full and pv <= 0.05),
+                  f"realized payoff Full={full:.4f} > NoWFBRI={nowf:.4f} (p={pv:.4f}); paper claims -8.9% drop")
 
     if "Proposed" in exp2 and "NoIT2" in exp2:
         prop = f(exp2["Proposed"], "avg_var_uhat_mean")

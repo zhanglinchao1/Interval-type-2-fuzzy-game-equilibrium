@@ -12,7 +12,7 @@ This repository packages the code and reproducibility assets for the FuzzyVeins 
 - Experiment automation and plotting scripts under `scripts/`.
 - MATLAB validation and theory checks under `matlab_sim/`.
 - Minimal auxiliary test code under `results/`.
-- All non-root Markdown documentation has been moved into `doc/`.
+- Full IT2 fuzzy-game decision module (C++) under `src/veins/modules/application/fuzzytrust/`.
 
 ## How to run
 
