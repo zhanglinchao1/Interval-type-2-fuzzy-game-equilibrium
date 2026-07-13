@@ -1,4 +1,4 @@
-# Computing Robust α-Fuzzy Nash Equilibria in Interval Type-2 Fuzzy Games for Vehicular Collaboration
+# Computing Robust α-Fuzzy Nash Equilibria in Interval Type-2 Fuzzy Payoff Games
 
 
 This repository packages the code and reproducibility assets for the FuzzyVeins experiments.
