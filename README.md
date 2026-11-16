@@ -1,5 +1,12 @@
 # Computing Robust α-Fuzzy Nash Equilibria in Interval Type-2 Fuzzy Payoff Games
 
+**Update: 2026-11-16**
+
+Added:
+- Online α selection and calibration comparisons.
+- IT2 mechanism ablations and W-FBRI–governance closed-loop experiments.
+- Contraction-certificate verification and sparse asynchronous Veins validation.
+- MATLAB–C++ consistency tests and supporting simulation data.
 
 This repository packages the code and reproducibility assets for the FuzzyVeins experiments.
 
