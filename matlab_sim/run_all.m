@@ -1,4 +1,5 @@
-% run_all.m - 一键运行论文 §5.1 MATLAB 算法层仿真
+% run_all.m - 运行基础 MATLAB 算法层实验
+% 新增审稿验证使用各自的 exp_*.m 和 verify_r3*.py 入口。
 % 运行前请确保 matlab_sim/ 目录结构完整
 
 clear; clc; close all;
@@ -63,7 +64,7 @@ fprintf('▶ 运行实验八 (模糊/区间博弈 SOTA 对比) ...\n');
 run('exp_5_1_8_fuzzy_game_sota.m');
 
 fprintf('\n============================================================\n');
-fprintf('  全部实验完成！\n');
+fprintf('  基础实验完成！\n');
 fprintf('  图片输出目录: %s\n', fullfile(script_dir, 'image'));
 fprintf('  表格输出目录: %s\n', fullfile(script_dir, 'table'));
 fprintf('============================================================\n');

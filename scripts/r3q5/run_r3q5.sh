@@ -17,6 +17,8 @@ case "$mode" in
     full) runs="$(seq 20 29) $(seq 110 119)"; duration=600s;;
     *) exit 2;;
 esac
+status_file="results/r3q5/${mode}_status.log"
+: > "$status_file"
 for r in $runs; do
     export R3Q5_TRACE="$PWD/results/r3q5/traces/${mode}_${r}.csv"
     if [ "$mode" = trace_off ]; then unset R3Q5_TRACE; fi
@@ -25,5 +27,5 @@ for r in $runs; do
         -n .:../../src/veins -l ../../out/clang-release/src/veins \
         --sim-time-limit="$duration" --cmdenv-express-mode=true --debug-on-errors=false \
         r3q5.ini > "results/r3q5/logs/${mode}_${r}.log" 2>&1
-    echo "$mode run=$r duration=$duration wall_seconds=$((SECONDS-started)) PASS"
+    echo "$mode run=$r duration=$duration wall_seconds=$((SECONDS-started)) PASS" | tee -a "$status_file"
 done

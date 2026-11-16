@@ -58,6 +58,8 @@ manifest['library_sha256']=hashlib.sha256((root/'../../out/clang-release/src/lib
 with tarfile.open(out/'r3q5_bundle.tar','w') as tar:
     for r in expected:tar.add(export/f'full_{r}.csv.gz',arcname=f'full_{r}.csv.gz')
     for name in ['cpp_consistency.csv','cpp_closed_loop.csv','cpp_closed_loop_trace.csv','reference.csv',
-                 'trace_neutrality.json','manifest.json','source_snapshot.tar.gz','full_status.log','build.log']:
+                 'trace_neutrality.json','manifest.json','source_snapshot.tar.gz','full_status.log']:
         tar.add(out/name,arcname=name)
+    if (out/'build.log').is_file():
+        tar.add(out/'build.log',arcname='build.log')
 print(json.dumps(dict(status='PASS',runs=len(expected),neutrality=neutral,bundle_bytes=(out/'r3q5_bundle.tar').stat().st_size)))
