@@ -100,9 +100,9 @@ end
 try
     mz = adapt_to_mallozzi(G.U_lo, G.U_hi, 0.5);     % η=0.5 中性固定态度
     t0 = tic;
-    [pis{3}, ~] = solve_mallozzi_reduced(mz.M_eta);
+    [pis{3}, mz_info] = solve_mallozzi_reduced(mz.M_eta);
     runtime(3) = toc(t0);
-    rounds(3) = 1;                     % 固定态度一次性标量化 + 均衡
+    rounds(3) = mz_info.iterations;    % 4x4 适配实例上的复制迭代轮数
 catch err
     ok(3) = false; fprintf('[WARN] Mallozzi 求解失败: %s\n', err.message);
 end
@@ -130,12 +130,15 @@ for i = 1:num_m
     end
 end
 
-%% 3) 能力矩阵 (结构性证据, que.md §4.2 / stag.md:193)
-% 列: Players | Solver | ConvCert | TunableAlpha | CenterShift | Governance
-players      = {'2';            '2';            '2';                 'N (mean-field)'};
-solver_type  = {'one-shot GP';  'one-shot LP';  'one-shot Hurwicz';  'iterative learning'};
-conv_cert    = {'No';           'No';           'No';                'Yes (q_th<1)'};
-tunable_a    = {'No';           'No';           'No (fixed eta)';    'Yes'};
+%% 3) Original model scope, solver adapters, and operating-point certificate
+% Players describes the original model; all numerical tests use two players.
+% EndpointPreference identifies the parameter; the Hurwicz adapter fixes eta=0.5.
+% The displayed Proposed metrics use the focused deep-annealed point, so
+% its certificate is a posteriori rather than the Theorem-1 contraction.
+players      = {'2';            '2';            'N';                 'N (mean-field)'};
+solver_type  = {'one-shot GP';  'one-shot LP';  'Hurwicz + RD';      'iterative learning'};
+point_cert   = {'None';         'None';         'None';              'A-posteriori'};
+endpoint_pref = {'--';          '--';          'eta';               'alpha'};
 center_shift = {'No';           'No';           'No';                'Yes'};
 governance   = {'No';           'No';           'No';                'Yes'};
 
@@ -153,9 +156,9 @@ for i = 1:num_m
     end
 end
 
-T = table(methods(:), players, solver_type, conv_cert, tunable_a, center_shift, ...
+T = table(methods(:), players, solver_type, point_cert, endpoint_pref, center_shift, ...
     governance, EquilErr, E_U, WC_Q5, CE_g, CVaR5, ExPostViol, runtime, ...
-    'VariableNames', {'Method', 'Players', 'Solver', 'ConvCert', 'TunableAlpha', ...
+    'VariableNames', {'Method', 'Players', 'Solver', 'PointCert', 'EndpointPreference', ...
     'CenterShiftCaptured', 'GovernanceCoupling', 'EquilibriumError', 'E_U', ...
     'WC_Q5', 'CE_055', 'CVaR5', 'ExPostViolation', 'Runtime_s'});
 csv_path = fullfile(tbl_dir, 'table5_8_fuzzy_game_sota.csv');
@@ -281,12 +284,8 @@ function [pi_star, info] = solve_proposed_reduced(G, alpha, params, focus_s)
 end
 
 function [pi_star, info] = solve_mallozzi_reduced(M_eta)
-% SOLVE_MALLOZZI_REDUCED 固定 Hurwicz 标量化 crisp 对称博弈的 Nash(演化静息点)
-%   复现边界(必读): Mallozzi & Vidal-Puga (2023) 的闭式 dominance/Hurwicz 解针对 2×2;
-%   本实例为 4×4, 故此处**基于其已发表的 Hurwicz 标量化思想实现**(implemented from the
-%   published Hurwicz scalarization), 而非直接调用原文给出的 4×4 闭式算法: 在 Hurwicz
-%   标量化矩阵 M_eta=(1-η)U_lo+η·U_hi 上用复制动态求静息点(对称 Nash)。该实现细节在
-%   主文 Module A 段落如实标注, 以界定复现范围。
+% SOLVE_MALLOZZI_REDUCED 4x4 Hurwicz 适配实例上的离散复制迭代。
+%   原模型允许有限 N 个主体；此处在 M_eta=(1-eta)U_lo+eta*U_hi 上求两人对称静息策略。
     num_s = size(M_eta, 1);
     q = ones(num_s, 1) / num_s;
     step = 0.1; max_it = 50000; tol = 1e-12;

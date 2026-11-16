@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "runs": 20,
+  "vehicle_updates": 366456,
+  "all_policy_updates": 426456,
+  "governance_updates": 60000,
+  "received_reports": 40701,
+  "recovery_episodes": 6323,
+  "max_step_error": 4.440892098500626e-16,
+  "max_aggregate_error": 0.0,
+  "fast_bound_max_slack": -2.1319516536918026e-05,
+  "governance_bound_max_slack": -1.0326317393767256e-06,
+  "max_data_age": 378.0,
+  "duplicate_fraction_max": 0.0,
+  "cpp_runs": 60,
+  "cpp_max_endpoint_error": 9.998879502148839e-11,
+  "cpp_steps_range": [
+    4705,
+    4711
+  ],
+  "certificate_feedback": "0.696189616465902476872790592144190158255743905193574213654437",
+  "certificate_domain": [
+    "x in simplex; x_SC >= 1/4",
+    "sum(omega)=1; .15 <= omega_l <= .25"
+  ]
+}

@@ -43,9 +43,15 @@ function report = sec5_1_premise_diagnostics(omega, params)
         [0.10; 0.10; 0.70; 0.10], ...
         [0.10; 0.10; 0.10; 0.70]];
     equilibria = zeros(4, size(initial_states, 2));
+    payoff = @(x) sec4_4_1_population_payoff(x, theta, params);
+    frozen_rhs = @(t, x) x .* (payoff(x) - x' * payoff(x));
+    ode_options = odeset('RelTol', 1e-11, 'AbsTol', 1e-14);
     for k = 1:size(initial_states, 2)
-        equilibria(:, k) = sec5_1_slow_manifold( ...
-            omega, params, initial_states(:, k));
+        % Independent trajectories retain the meaning of the basin diagnostic.
+        [~, trajectory] = ode15s(frozen_rhs, ...
+            [0, 10 * params.T_evo * params.dt_evo], ...
+            initial_states(:, k), ode_options);
+        equilibria(:, k) = trajectory(end, :)';
     end
     basin_spread = 0;
     for a = 1:size(equilibria, 2)

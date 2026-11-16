@@ -131,7 +131,7 @@ function [pi_star, hist] = solve_method(method, params_B, delta_true, theta)
         case 'Proposed-Base'          % 现状固定点 (alpha=0.05, s=20, lambda=0.15)
             [pi_star, hist] = sec4_3_1_wfbri_solve(params_B, ...
                 delta_true, theta, 0.05, 20);
-        case 'Proposed-Anneal'        % 改动A: 认证退火 (声明调度, 其余同 Base)
+        case 'Proposed-Anneal'        % 改动A: 声明退火 (其余同 Base)
             p = params_B;
             p.lambda_path = [0.15, 0.08, 0.04, 0.02];
             [pi_star, hist] = sec4_3_1_wfbri_solve(p, ...

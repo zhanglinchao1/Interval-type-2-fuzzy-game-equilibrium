@@ -4,10 +4,10 @@ function x_star = sec5_1_slow_manifold(omega, params, x_init)
 %   计算复制动态 (4-31) 在固定 ω (即固定 θ = P_pay·ω) 下的稳态:
 %       x*(ω) = lim_{t→∞} x(t),    ẋ_j = x_j[U_j(x,θ) - Ū(x,θ)]
 %
-%   这是论文定理 4 中慢流形 M_s = {(x*(ω), ω) : g(x*(ω), ω) = 0} 的快子系统部分。
-%   实验三用 d_slow(T) = ||x(T) - x*(ω(T))||_2 量化 (4-43) 的 O(ε_g) 邻域。
+%   平衡图为 {(x*(ω), ω)}；联合均衡还要求 g(x*(ω), ω) = 0。
+%   d_slow(T) = ||x(T) - x*(ω(T))||_2 度量快状态跟踪误差。
 %
-%   实现: Euler 前向迭代直到 max|Δx| < eps_tol 或达到 T_max。
+%   稳定内点由等收益方程直接求解；其他分支保留原 Euler 求解路径。
 %
 %   输入:
 %       omega  - K×1 治理权重 (慢时标参数, 视为常数)
@@ -29,6 +29,20 @@ function x_star = sec5_1_slow_manifold(omega, params, x_init)
         theta = theta / s;
     else
         theta = ones(3, 1) / 3;
+    end
+
+    A = theta(1) * params.trust_matrix + ...
+        theta(2) * params.delay_matrix + theta(3) * params.res_matrix;
+    num_s = size(A, 1);
+    Q = null(ones(1, num_s));
+    tangent = Q' * ((A + A') / 2) * Q;
+    bordered = [A, -ones(num_s, 1); ones(1, num_s), 0];
+    if max(eig(tangent)) < -1e-12 && rcond(bordered) > 1e-12
+        candidate = bordered \ [zeros(num_s, 1); 1];
+        if all(candidate(1:num_s) > 0)
+            x_star = candidate(1:num_s);
+            return;
+        end
     end
 
     x = x_init(:);

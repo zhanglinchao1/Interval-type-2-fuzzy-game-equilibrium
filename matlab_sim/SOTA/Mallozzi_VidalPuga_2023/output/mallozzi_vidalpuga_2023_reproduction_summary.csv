@@ -1,0 +1,5 @@
+CaseName,TightNashCount,LooseNashCount,LooseHurwiczCount,InteriorHurwiczCount,MixedP,MixedQ,MixedResidual
+Example 3.1,0,2,2,2,NaN,NaN,NaN
+Example 5.1,0,4,2,2,NaN,NaN,NaN
+Example 5.2,1,1,2,1,NaN,NaN,NaN
+Example 6.1,0,0,4,0,0.5,0.5,0

@@ -21,8 +21,8 @@ clear; clc; close all;
 %% 全局字体设置
 set(0, 'DefaultAxesFontName', 'Times New Roman');
 set(0, 'DefaultTextFontName', 'Times New Roman');
-set(0, 'DefaultAxesFontSize', 12);
-set(0, 'DefaultTextFontSize', 12);
+set(0, 'DefaultAxesFontSize', 16);
+set(0, 'DefaultTextFontSize', 16);
 
 %% 路径与输出目录
 script_dir = fileparts(mfilename('fullpath'));
@@ -103,7 +103,7 @@ end
 %   右轴 Center Shift    : 凹聚合实测 & 理论 -Σθδ² (二者重合) / 线性 g (≡0)
 %   图例置于绘图框外下方 (southoutside), 不遮挡任何曲线; 每项加 (L)/(R) 标注所属轴
 figure('Name', 'IT2 Type-Reduced Center Separation', ...
-    'Position', [120, 90, 660, 500]);
+    'Position', [120, 90, 520, 340]);
 ax = axes; hold(ax, 'on');
 
 c_center = [0    0.45 0.74];   % 蓝   - Û_IT2 中心      (左轴)
@@ -131,7 +131,7 @@ h_msr = plot(delta_values, gap_con, 'o', 'Color', c_shift, ...
     'MarkerSize', 9, 'MarkerFaceColor', c_shift, 'LineStyle', 'none');
 h_lin = plot(delta_values, gap_lin, '--s', 'Color', c_lin, ...
     'LineWidth', 1.8, 'MarkerSize', 8, 'MarkerFaceColor', 'none');
-ylabel('Center Shift  \^U_{IT2} - \^U_{T1}', 'FontSize', 12);
+ylabel('IT2 - Type-1 center shift', 'FontSize', 12);
 ylim([-0.045, 0.006]);
 set(ax, 'YColor', 'k');
 
@@ -141,28 +141,16 @@ xlabel('Uncertainty Half-Bandwidth \delta', 'FontSize', 12);
 xlim([-0.006, 0.206]);
 grid on;
 
-% 图例置于绘图区正中空白带: 仅压黑色下垂线, 不碰左轴三条结论曲线 (半径/中心/ν_α)。
-% MATLAB 无 'center' 选项, 故手动居中; 先按最终字号 (12pt, 与出版样式一致) 测尺寸再定位,
-% 避免后续字号覆盖使文字溢出图例框。图例白底不透明, 会干净盖住其后的黑线。
+% 图例放在轴外, 避免遮挡右轴的理论曲线。
 lgd = legend([h_rho, h_ctr, h_nu, h_th, h_msr, h_lin], ...
-    {'Radius \rho_{bar} (L)', '\^U_{IT2} center (L)', ...
-     '\nu_\alpha=\^U-(1-\alpha)\rho, \alpha=0.5 (L)', ...
-     'Theory -\Sigma\theta\delta^2 (R)', 'Concave g meas. (R)', ...
-     'Linear g \equiv0 (R)'}, ...
-    'NumColumns', 2, 'FontSize', 12);
-drawnow;
-axp = ax.Position;                         % 绘图区位置 (figure 归一化)
-lgd.Units = 'normalized';
-lp = lgd.Position;                         % 图例自然尺寸 (12pt 下)
-lgd.Location = 'none';
-% 水平居中; 纵向下移至轴高 0.25 处, 使图例顶边落在 δ=0.10(0.65) 与 δ=0.15(0.42) 两黑点下方,
-% 坐落于黑线与半径线之间的空三角区, 只压黑线、不压任何黑色实测点。
-y_center_frac = 0.25;
-lgd.Position = [axp(1) + axp(3)/2 - lp(3)/2, ...
-                axp(2) + y_center_frac*axp(4) - lp(4)/2, ...
-                lp(3), lp(4)];
+    {'Radius (L)', 'IT2 center (L)', 'Decision value (L)', ...
+     'Theory (R)', 'Measured (R)', 'Linear control (R)'}, ...
+    'Location', 'southoutside', 'NumColumns', 2, 'FontSize', 12);
 
 apply_fig5_publication_style(gcf);
+set(findall(gcf, '-property', 'FontSize'), 'FontSize', 14);
+lgd.FontSize = 12;
+set(ax, 'YMinorGrid', 'off', 'XMinorGrid', 'off', 'GridAlpha', 0.15);
 local_save_figure(gcf, fullfile(img_dir, 'fig5_19_center_separation.png'), ...
     fullfile(img_dir, 'fig5_19_center_separation.pdf'));
 fprintf('\n[图] %s\n', fullfile('image', 'fig5_19_center_separation.png'));
@@ -226,7 +214,7 @@ for d_idx = 1:num_delta
 end
 
 fprintf('\n===== 实验七完成 =====\n');
-close all;
+pause;       % 等待直到图窗被关闭或调用 uiresume
 
 %% ====== 辅助函数 ======
 function wc = local_worst_case(pi_star, delta, theta, params, sigma_xi, ...

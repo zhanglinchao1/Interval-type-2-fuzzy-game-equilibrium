@@ -218,9 +218,8 @@ def marker_style(method):
 
 
 def fig_frontier(exp1_rows, exp2_rows):
-    """Measured payoff (x) vs measured payoff variance (y) at Nv=200, broken
-    y-axis (two stacked panels, same units -- not a dual-axis chart), with the
-    three-state certificate encoding on the marker edge.
+    """Measured payoff (x) vs measured payoff variance (y) at Nv=200, with a
+    continuous y-axis and three-state certificate encoding on the marker edge.
 
     The measured data split into two variance bands:
       high (~8.5e-3): Greedy and w/o IT2 -- the two uncertainty-blind payoff
@@ -240,21 +239,20 @@ def fig_frontier(exp1_rows, exp2_rows):
     # on the same point (0.7435/6.60 vs 0.7425/6.61), so both get long leader
     # lines pointing in opposite directions; everything else gets a short
     # collision-free offset.
-    LABEL_OFFSET_TOP = {
+    LABEL_OFFSET = {
         "NoIT2":  (12, -18, "left", True),
         "Greedy": (-16, -2, "right", False),
-    }
-    LABEL_OFFSET_BOT = {
         "Proposed": (16, 4, "left", False),      # 右侧空白区
-        "NoRobust": (-40, -26, "right", True),   # 引线拉到左下空白
+        "NoRobust": (20, 40, "left", True),      # 上方空白区
         "NoWFBRI":  (26, 16, "left", True),
-        "NoGov":    (-12, -20, "right", False),
-        "FixedW":   (-14, -8, "right", False),
+        "NoGov":    (-30, -28, "right", False),
+        "FixedW":   (-20, -22, "right", False),
     }
 
-    fig, (ax_top, ax_bot) = plt.subplots(
-        2, 1, sharex=True, figsize=(6.6, 5.0), dpi=300,
-        gridspec_kw={"height_ratios": [1.0, 1.7], "hspace": 0.08})
+    axis_font_size = 16
+    annotation_font_size = 14
+    legend_font_size = 16
+    fig, ax = plt.subplots(figsize=(8.0, 5.6), dpi=300)
 
     for m in order:
         r = pts[m]
@@ -262,9 +260,7 @@ def fig_frontier(exp1_rows, exp2_rows):
         xerr = f(r, "realized_uhat_ci95")
         y = f(r, "avg_var_uhat_mean") * 1e3
         yerr = f(r, "avg_var_uhat_ci95") * 1e3
-        in_top = m in LABEL_OFFSET_TOP
-        ax = ax_top if in_top else ax_bot
-        dx, dy, ha, leader = (LABEL_OFFSET_TOP if in_top else LABEL_OFFSET_BOT)[m]
+        dx, dy, ha, leader = LABEL_OFFSET[m]
 
         style = marker_style(m)
         ls = style.pop("linestyle", "-")
@@ -277,31 +273,20 @@ def fig_frontier(exp1_rows, exp2_rows):
                      shrinkA=2, shrinkB=9) if leader else None
         ax.annotate(LABEL[m], xy=(x, y), xytext=(dx, dy),
                     textcoords="offset points", ha=ha, va="center",
-                    fontsize=10, color="0.1", fontweight="bold",
+                    fontsize=annotation_font_size, color="0.1", fontweight="bold",
                     arrowprops=arrow, zorder=4)
 
-    ax_top.set_ylim(8.30, 8.75)
-    ax_bot.set_ylim(6.10, 6.90)
-    ax_top.set_xlim(0.585, 0.690)
-    for ax in (ax_top, ax_bot):
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        ax.grid(linestyle="--", linewidth=0.6, alpha=0.35)
-    ax_top.spines["bottom"].set_visible(False)
-    ax_bot.spines["top"].set_visible(False)
-    ax_top.tick_params(bottom=False)
+    ax.set_ylim(6.00, 8.75)
+    ax.set_xlim(0.585, 0.690)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(linestyle="--", linewidth=0.6, alpha=0.35)
+    ax.tick_params(axis="both", labelsize=axis_font_size)
 
-    d = 0.010
-    kwargs = dict(transform=ax_top.transAxes, color="0.3", clip_on=False, lw=1.0)
-    ax_top.plot((-d, +d), (-2 * d, +2 * d), **kwargs)
-    kwargs.update(transform=ax_bot.transAxes)
-    ax_bot.plot((-d, +d), (1 - 2 * d, 1 + 2 * d), **kwargs)
-
-    ax_bot.set_xlabel(r"Realized payoff $\bar{U}^{\mathrm{real}}$ (measured, higher is better)",
-                       fontweight="bold")
-    fig.text(0.015, 0.5,
-             r"Payoff variance $\mathrm{Var}(\hat U)$ ($\times 10^{-3}$, lower is better)",
-             fontweight="bold", rotation=90, va="center", ha="left", fontsize=12)
+    ax.set_xlabel(r"Realized payoff $\bar{U}^{\mathrm{real}}$ (measured, higher is better)",
+                  fontsize=axis_font_size, fontweight="bold")
+    ax.set_ylabel(r"Payoff variance $\mathrm{Var}(\hat U)$ ($\times 10^{-3}$, lower is better)",
+                  fontsize=axis_font_size, fontweight="bold", labelpad=18)
 
     legend_handles = [
         Line2D([0], [0], marker="o", color="none", markerfacecolor="0.78",
@@ -314,10 +299,16 @@ def fig_frontier(exp1_rows, exp2_rows):
                markeredgecolor=VIOLATION_RED, markeredgewidth=2.8, markersize=10,
                label=r"certificate violated"),
     ]
-    ax_bot.legend(handles=legend_handles, loc="upper right", fontsize=8.7,
-                  framealpha=0.95, borderaxespad=0.5)
+    legend = ax.legend(handles=legend_handles, loc="center right", bbox_to_anchor=(0.98, 0.53),
+                       fontsize=legend_font_size, framealpha=0.95, borderaxespad=0.5)
 
-    fig.tight_layout(rect=(0.045, 0, 1, 1))
+    # Set explicit text sizes after creation so backend defaults cannot override them.
+    for label in (*ax.get_xticklabels(), *ax.get_yticklabels()):
+        label.set_fontsize(axis_font_size)
+    for label in legend.get_texts():
+        label.set_fontsize(legend_font_size)
+
+    fig.tight_layout()
     save_both(fig, "fig5-20-frontier")
     save_both(fig, "fig5-17")   # legacy filename slot (superseded original), kept in sync
     plt.close(fig)

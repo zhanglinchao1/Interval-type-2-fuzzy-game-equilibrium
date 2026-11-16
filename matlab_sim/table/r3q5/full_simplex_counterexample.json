@@ -1,0 +1,28 @@
+{
+  "x": [
+    0.104,
+    0.066,
+    0.022,
+    0.808
+  ],
+  "omega": [
+    0.92,
+    0.05,
+    0.01,
+    0.01,
+    0.01
+  ],
+  "theta": [
+    0.5860000000000001,
+    0.30750000000000005,
+    0.10650000000000003
+  ],
+  "direction": [
+    0,
+    3
+  ],
+  "analytic_block_l1_derivative": 1.1500456242027592,
+  "centered_finite_difference": 1.1500456242111157,
+  "step": 1e-06,
+  "scope": "outside actual invariant initialization domain; disproves a full-simplex soft-response contraction claim in this norm"
+}

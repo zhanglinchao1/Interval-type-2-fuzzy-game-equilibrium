@@ -1,7 +1,7 @@
 % exp_5_1_2_robustness.m - 论文 §5.1 实验二: 区间二型建模与鲁棒 α-FNE 验证
 %
 % 验证目标 (对齐 chapter5.md §5.1 实验二新版设计):
-%   (a) 引理 1 (4-17): ε_req ≤ 2(1-α)ρ̄ 在所有 (α, δ) 组合下成立
+%   (a) 引理 1: 在同一返回策略上检查 ε_req ≤ ε_NE + B_rho。
 %   (b) 引理 1 按 agent 通过率 PassRate ≈ 100%
 %   (c) IT2 鲁棒性: Type-1 (δ=0) 在状态扰动 ξ~N(0,σ²) 下 Var_ξ(Û) 显著高于
 %       IT2-midpoint 与 Proposed; Proposed 在 α-cut 下界决策下取得最低 Var_ξ
@@ -13,7 +13,7 @@
 %   Proposed IT2-W-FBRI (α<1)    - δ>0, α<1, 决策 ν=U̲^α=Û-(1-α)ρ (鲁棒-悲观)
 %
 % 输出:
-%   image/fig5_5_alpha_robust_error.png    - ε_req(实测) vs 2(1-α)ρ̄(理论) 按 δ 分组
+%   image/fig5_5_alpha_robust_error.png    - 中点相对增量与区间预算，按 δ 分组
 %   image/fig5_6_decision_margin.png       - 三方法决策鲁棒边距 (1-α)·ρ̄ vs δ
 %   image/fig5_7_worst_case_payoff.png     - 扰动下 Worst-case 收益 (Q5/mean) 对比
 %   image/fig5_8_safety_coverage.png       - 扰动幅度 σ_ξ vs 决策安全垫 (1-α)·ρ̄ 覆盖关系
@@ -25,8 +25,8 @@ clear; clc; close all;
 %% 全局字体设置
 set(0, 'DefaultAxesFontName', 'Times New Roman');
 set(0, 'DefaultTextFontName', 'Times New Roman');
-set(0, 'DefaultAxesFontSize', 12);
-set(0, 'DefaultTextFontSize', 12);
+set(0, 'DefaultAxesFontSize', 16);
+set(0, 'DefaultTextFontSize', 16);
 
 %% 路径与输出目录
 script_dir = fileparts(mfilename('fullpath'));
@@ -63,6 +63,7 @@ num_delta = length(delta_values);
 
 theoretical_bound = zeros(num_alpha, num_delta);  % 引理 1 理论预算 2(1-α)ρ̄
 eps_required      = zeros(num_alpha, num_delta);  % 实测最小 ε (4-15)
+eps_ne_grid       = zeros(num_alpha, num_delta);  % 同一策略的标量可利用度
 pass_rate         = zeros(num_alpha, num_delta);  % 按 agent 通过率
 avg_payoff_grid   = zeros(num_alpha, num_delta);  % 平均收益
 per_agent_gap_all = cell(num_alpha, num_delta);   % 每个 (α,δ) 的 N×1 gap
@@ -81,6 +82,7 @@ for d_idx = 1:num_delta
 
         theoretical_bound(a_idx, d_idx) = report.theoretical_bound;
         eps_required(a_idx, d_idx)      = report.eps_required;
+        eps_ne_grid(a_idx, d_idx)       = report.eps_ne;
         per_agent_gap_all{a_idx, d_idx} = report.per_agent_gap;
 
         % 平均收益 (中心 Û 评估)
@@ -94,40 +96,24 @@ for d_idx = 1:num_delta
     end
 end
 
-%% 2) 引理 1 baseline 扣除 + 按 agent 通过率
-% W-FBRI 输出 π* 是熵正则软响应均衡 (λ>0), 与精确 α-FNE 存在常量基线偏差。
-% ε_req = ε_base(δ) (软响应误差 + 中心偏移) + ε_robust_actual (α-cut 半径增量)
-% 引理 1 真正验证: ε_robust_actual ≤ 2(1-α)ρ̄
-%
-% 注 (Route C): 引理 1 比较的是"同一 δ 下 α-cut 相对中点 (α=1) 的半径预算"。
-% 在凹聚合 + bell-FOU 下, 类型缩减中心随策略异质偏移 -Σθδ_eff², 因此 α=1 的中点
-% 收益本身已含 δ 相关偏移。基线必须按"同 δ 的 α=1 行"扣除 (而非固定 (α=1,δ=0)),
-% 才能正确剥离中心偏移、只保留 α-cut 半径增量。线性聚合下中心与 δ 无关, 两种基线
-% 等价; 凹聚合下必须用按-δ 基线 (否则 α=1 行会因中心偏移残差出现 0 预算的伪违反)。
-alpha_one_idx  = find(abs(alpha_values - 1.0) < 1e-9, 1);
-delta_zero_idx = find(abs(delta_values - 0.0) < 1e-9, 1);
-eps_base = eps_required(alpha_one_idx, delta_zero_idx);
-% 每个 δ 列单独的 α=1 baseline (按-δ 中点基线, 见上)
-per_agent_base_byd = per_agent_gap_all(alpha_one_idx, :);  % 1×num_delta cell
-
-fprintf('\n--- Step 2: 引理 1 验证 (按-δ 中点基线, 按 agent 通过率) ---\n');
-fprintf('%-4s | %-5s | %12s | %12s | %14s | %10s | %s\n', ...
-    'α', 'δ', '理论 2(1-α)ρ̄', '实测 ε_req', '鲁棒增量', '通过率', '是否成立');
-fprintf('%s\n', repmat('-', 1, 90));
+%% 2) 同一策略上的引理 1 检查；中点差值另作描述性比较
+alpha_one_idx = find(abs(alpha_values - 1.0) < 1e-9, 1);
+per_agent_base_byd = per_agent_gap_all(alpha_one_idx, :);
+fprintf('\n--- Step 2: epsilon_req <= epsilon_NE + B_rho at each returned profile ---\n');
+fprintf('%-4s | %-5s | %12s | %12s | %12s | %10s | %s\n', ...
+    'alpha', 'delta', 'B_rho', 'epsilon_req', 'epsilon_NE', 'PassRate%', 'holds');
 
 lemma1_pass = 0;
 lemma1_total = 0;
 for a_idx = 1:num_alpha
     for d_idx = 1:num_delta
         gap_all = per_agent_gap_all{a_idx, d_idx};
-        % 按 agent 扣除"同 δ 的 α=1 中点基线"后的 α-cut 半径增量
-        gap_robust = max(0, gap_all - per_agent_base_byd{d_idx});
         bound = theoretical_bound(a_idx, d_idx);
-        pass_per_agent = (gap_robust <= bound + 1e-6);
+        certificate = eps_ne_grid(a_idx, d_idx) + bound;
+        pass_per_agent = (gap_all <= certificate + 1e-12);
         pass_rate(a_idx, d_idx) = sum(pass_per_agent) / length(gap_all);
 
-        eps_robust_max = max(gap_robust);
-        ok = (eps_robust_max <= bound + 1e-6);
+        ok = (eps_required(a_idx, d_idx) <= certificate + 1e-12);
         if ok
             ok_str = 'YES'; lemma1_pass = lemma1_pass + 1;
         else
@@ -136,7 +122,7 @@ for a_idx = 1:num_alpha
         lemma1_total = lemma1_total + 1;
         fprintf('%-4.1f | %-5.2f | %12.4f | %12.4f | %14.4f | %9.1f%% | %s\n', ...
             alpha_values(a_idx), delta_values(d_idx), ...
-            bound, eps_required(a_idx, d_idx), eps_robust_max, ...
+            bound, eps_required(a_idx, d_idx), eps_ne_grid(a_idx, d_idx), ...
             pass_rate(a_idx, d_idx) * 100, ok_str);
     end
 end
@@ -251,8 +237,8 @@ for d_idx = 1:num_delta
         U_hw_mean(d_idx), margin_hw(d_idx), WC_hw(d_idx));
 end
 
-%% 4) Fig 5-5: empirical eps_req vs theoretical 2(1-alpha)*rho_bar (grouped by delta)
-figure('Name', 'Lemma 1 Empirical Budget vs Theoretical Upper Bound', ...
+%% 4) Fig 5-5: midpoint-relative increment and interval allowance
+figure('Name', 'Midpoint-Relative Robust Increment', ...
     'Position', [100,100,480,330]);
 hold on;
 delta_colors = {[0.0 0.45 0.74], [0.85 0.33 0.10], [0.93 0.69 0.13], [0.49 0.18 0.56]};
@@ -276,12 +262,12 @@ hp_leg(num_delta+1) = plot(nan, nan, '-o', 'Color', 'k', 'LineWidth', 1.8, ...
 hp_leg(num_delta+2) = plot(nan, nan, '--s', 'Color', 'k', 'LineWidth', 1.6, ...
     'MarkerSize', 6);
 hold off;
-xlabel('Confidence Level \alpha', 'FontSize', 12);
+xlabel('Pessimism Parameter \alpha', 'FontSize', 12);
 ylabel('Robust Budget', 'FontSize', 12);
-title('(a) Robust increment vs budget', 'FontSize', 13);
+title('(a) Midpoint-relative robust increment', 'FontSize', 13);
 % 完整图例(颜色=δ ×4 + 线型=方法)放图内右上角, 2 列紧凑(3 行)使其落在曲线上方留白区, 不遮挡
 leg_labels = [arrayfun(@(d) sprintf('\\delta=%.2f', d), delta_values, ...
-    'UniformOutput', false), {'Theoretical', 'Empirical'}];
+    'UniformOutput', false), {'Interval allowance', 'Midpoint increment'}];
 legend(hp_leg, leg_labels, 'Location', 'northeast', 'NumColumns', 2, 'FontSize', 9);
 grid on;
 % 顶部留白带, 使 2 列图例位于所有曲线之上; δ=0 退化(\rho_{bar}=0 \Rightarrow budget\equiv0)见图注
@@ -462,12 +448,12 @@ save_tight_figure(gcf, fullfile(img_dir, 'fig5_8_safety_coverage.png'), ...
 fprintf('[图] %s\n', fullfile('image', 'fig5_8_safety_coverage.png'));
 
 %% 8) 表5-2: α × δ × 三方法的指标汇总
-% 主表: α × δ 笛卡尔积 (Proposed 决策路径), 含 ε_req/ε_robust/通过率
+% 主表: 同一策略的 ε_req、ε_NE 与 B_rho；中点增量仅作描述。
 fprintf('\n===== 表5-2(a) α × δ Proposed 决策的引理 1 验证 =====\n');
 fprintf('%-4s | %-5s | %9s | %12s | %12s | %14s | %s\n', ...
     'α', 'δ', '平均 Ū', '理论 2(1-α)ρ̄', '实测 ε_req', '鲁棒增量', 'PassRate%');
 fprintf('%s\n', repmat('-', 1, 92));
-T_rows = cell(num_alpha * num_delta, 7);
+T_rows = cell(num_alpha * num_delta, 8);
 row = 1;
 for a_idx = 1:num_alpha
     for d_idx = 1:num_delta
@@ -483,13 +469,13 @@ for a_idx = 1:num_alpha
         T_rows(row, :) = {alpha_values(a_idx), delta_values(d_idx), ...
             avg_payoff_grid(a_idx, d_idx), theoretical_bound(a_idx, d_idx), ...
             eps_required(a_idx, d_idx), eps_robust_max, ...
-            pass_rate(a_idx, d_idx) * 100};
+            pass_rate(a_idx, d_idx) * 100, eps_ne_grid(a_idx, d_idx)};
         row = row + 1;
     end
 end
 T_a = cell2table(T_rows, 'VariableNames', ...
     {'alpha','delta','AvgPayoff','TheoreticalBound','EpsRequired', ...
-     'RobustIncrement','PassRatePct'});
+     'RobustIncrement','PassRatePct','EpsNE'});
 
 % 副表: 三方法跨 δ 的均衡 Ū / 决策边距 / Worst-case Q5 收益
 fprintf('\n===== 表5-2(b) 三方法跨 δ 对比 (固定 α=%.1f) =====\n', alpha_default);
@@ -643,7 +629,8 @@ xlim([min(allE) - 0.08*xrng, max(allE) + 0.08*xrng]);
 ylim([min(allW) - 0.10*yrng, max(allW) + 0.12*yrng]);
 colormap(parula);
 cb = colorbar;
-cb.Label.String = 'Confidence Level alpha';
+cb.Label.String = 'Pessimism Parameter alpha';
+cb.Ticks = 0:0.2:1;
 xlabel('Expected Payoff E(Ubar)', 'FontSize', 12, 'Interpreter', 'none');
 ylabel('Worst Tail Payoff WCQ5', 'FontSize', 12, 'Interpreter', 'none');
 title('(b) Scenario-B mean--tail frontier', 'FontSize', 12);
@@ -744,7 +731,8 @@ fprintf('      α_CE=%.1f: E=%.4f, Q5=%.4f, CE=%.4f %s\n', ...
     T_e_final.CE_gamma(idx_best_ce), pass_label(scenarioB_pass));
 
 fprintf('\n===== 实验二完成 =====\n');
-close all;
+drawnow;
+shg;
 
 %% ====== 辅助函数 ======
 function [T_e, pi_alpha] = scenario_b_alpha_sweep(base_params, theta, ...

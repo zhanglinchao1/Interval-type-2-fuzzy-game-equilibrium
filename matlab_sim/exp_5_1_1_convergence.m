@@ -3,7 +3,7 @@
 % 验证目标 (对齐 chapter5.md §5.1 实验一新版设计):
 %   (a) 定理 2 全局压缩收敛: e_pi^(r) 几何衰减, q_hat <= q_th = (1-β) + β·κ
 %   (b) 加权机制 (3-7)(3-8) 必要性: Proposed (θ=P_pay·ω) vs Fixed-weight IT2 (θ=均匀)
-%   (c) 压缩条件 κ = D(θ)/(2λ) < 1 的工程边界 (命题 1 结构化模量, 非采样估计)
+%   (c) 压缩条件 κ = D(θ)/(2λ) < 1 的工程边界 (命题 1 精确多面体顶点模量)
 %   (d) (4-26) 单轮复杂度 O(|S|N) → 收敛轮数 R 关于 N 近似常数
 %
 % 对比方法 (相比旧版删除 Deterministic 和 Type-1 Fuzzy 两个伪对比):
@@ -24,8 +24,8 @@ clear; clc; close all;
 %% 全局字体设置
 set(0, 'DefaultAxesFontName', 'Times New Roman');
 set(0, 'DefaultTextFontName', 'Times New Roman');
-set(0, 'DefaultAxesFontSize', 12);
-set(0, 'DefaultTextFontSize', 12);
+set(0, 'DefaultAxesFontSize', 16);
+set(0, 'DefaultTextFontSize', 16);
 
 %% 路径与输出目录
 script_dir = fileparts(mfilename('fullpath'));
@@ -86,10 +86,10 @@ end
 %% 2) 几何压缩率 q_hat 与理论压缩率 q_th 计算
 %   q_hat = (e^(R) / e^(1))^(1/(R-1))    (实测)
 %   q_th  = (1-β) + β·κ, κ = D(θ)/(2λ)   (定理 2 + 命题 1 结构化模量)
-%   D(θ)  由成对交互核矩阵闭式计算 (公式 4-Dtheta), 不依赖采样
+%   D(θ)  由裁剪分区的多面体顶点有限最大值精确计算, 不依赖采样或稠密网格
 
 % 命题 1 结构化模量: Proposed (θ=P_pay·ω) 与 Fixed (θ=均匀)
-fprintf('\n[D(θ) 结构化计算] 由核矩阵闭式求得 (命题 1)...\n');
+fprintf('\n[D(θ) 精确计算] 裁剪分区多面体顶点证书 (命题 1)...\n');
 [D_proposed, info_prop] = sec4_3_1_kernel_variation_modulus(params_base, theta);
 [D_fixed, ~] = sec4_3_1_kernel_variation_modulus(params_base, ones(3,1)/3);
 
@@ -97,15 +97,16 @@ fprintf('\n[D(θ) 结构化计算] 由核矩阵闭式求得 (命题 1)...\n');
 D_theta_list = [NaN, D_fixed, D_proposed];
 fprintf('D(Fixed) = %.5f, D(Proposed) = %.5f (极差最大策略对: %d-%d)\n', ...
     D_fixed, D_proposed, info_prop.argmax_pair(1), info_prop.argmax_pair(2));
+fprintf('D_sf(Proposed) = %.5f, 仅用于显式无饱和结论\n', ...
+    info_prop.D_saturation_free);
 
-% 命题 1 前提: 均匀 FOU 不饱和检查 (沿 N=50 Proposed 迭代轨迹)
-%   μ_k(j,r) = M_k(j,:)·x̄(r) 须落在 [δ, 1-δ] 内, 否则裁剪会破坏共同平移消去
+% 轨迹不饱和检查仅用于 D_sf 诊断；D_proposed 已覆盖全局端点裁剪。
 sat_ok = check_fou_saturation(params_base, delta, ...
     results_all{default_N_idx, 3}.strategy_dist);
 fprintf('[饱和检查] 均匀 FOU 沿迭代轨迹不饱和 (μ∈[δ,1-δ]): %s\n', ...
     pass_label(sat_ok));
 
-lambda_default = params_base.lambda;   % 0.20 (认证窗内默认工作点)
+lambda_default = params_base.lambda;   % 0.15 性能点 (全局认证点为 0.20)
 beta_default   = params_base.beta;     % 0.3
 kappa_fixed    = D_fixed    / (2 * lambda_default);
 kappa_proposed = D_proposed / (2 * lambda_default);
@@ -207,7 +208,7 @@ fprintf('[图] %s\n', fullfile('image', 'fig5_2_payoff_convergence.png'));
 
 %% Fig 5-1 merged: residual and payoff in one dual-axis coordinate system
 figure('Name', 'W-FBRI Convergence: Residual and Payoff', ...
-    'Position', [150,100,520,360]);
+    'Position', [150,100,520,320]);
 yyaxis left;
 hold on;
 handles_res = gobjects(length(plot_methods_curve), 1);
@@ -219,11 +220,11 @@ for k = 1:length(plot_methods_curve)
         'Color', colors{m}, 'LineStyle', line_styles{m}, ...
         'LineWidth', linewidths(m), ...
         'Marker', markers{m}, 'MarkerIndices', 1:mark_step:length(iters), ...
-        'MarkerSize', marker_sizes(m), 'MarkerFaceColor', colors{m});
+        'MarkerSize', 6, 'MarkerFaceColor', colors{m});
 end
 hold off;
 set(gca, 'YScale', 'log');
-ylabel('Strategy Residual e_\pi^{(r)}', 'FontSize', 12);
+ylabel('Strategy residual (log scale)', 'FontSize', 14);
 
 yyaxis right;
 hold on;
@@ -236,24 +237,29 @@ for k = 1:length(plot_methods_curve)
         'Color', colors{m}, 'LineStyle', ':', ...
         'LineWidth', linewidths(m), ...
         'Marker', markers{m}, 'MarkerIndices', 1:mark_step:length(iters), ...
-        'MarkerSize', marker_sizes(m), 'MarkerFaceColor', 'w');
+        'MarkerSize', 6, 'MarkerFaceColor', 'w');
 end
 hold off;
-ylabel('Average Payoff U^{(r)}_{avg}', 'FontSize', 12);
+ylabel('Average payoff (linear scale)', 'FontSize', 14);
 
 xlabel('Iteration r', 'FontSize', 12);
-title('Convergence residual and payoff', 'FontSize', 13);
 lgd = legend([handles_res; handles_pay], ...
-    [strcat(methods(plot_methods_curve), ' residual'), ...
-     strcat(methods(plot_methods_curve), ' payoff')], ...
-    'Location', 'southwest', 'FontSize', 9);
+    {'Fixed-W residual', 'Proposed residual', ...
+     'Fixed-W payoff', 'Proposed payoff'}, ...
+    'Location', 'southoutside', 'NumColumns', 2, 'FontSize', 12);
 grid on;
 apply_fig5_publication_style(gcf);
+set(findall(gcf, '-property', 'FontSize'), 'FontSize', 14);
+set(gca, 'YMinorGrid', 'off', 'XMinorGrid', 'off', 'GridAlpha', 0.15);
 yyaxis left;
-set(gca, 'YColor', 'k');
+set(gca, 'YColor', 'k', 'YTick', [1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1], ...
+    'YLim', [1e-5, 1]);
+ax = gca;
+ax.YAxis(1).Label.FontWeight = 'normal';
+ax.YAxis(2).Label.FontWeight = 'normal';
 yyaxis right;
 set(gca, 'YColor', 'k');
-lgd.FontSize = 9;
+lgd.FontSize = 12;
 saveas(gcf, fullfile(img_dir, 'fig5_1_convergence_dual_axis.png'));
 exportgraphics(gcf, fullfile(img_dir, 'fig5_1_convergence_dual_axis.pdf'), ...
     'ContentType', 'vector', 'BackgroundColor', 'white');
@@ -282,9 +288,9 @@ exportgraphics(gcf, fullfile(img_dir, 'fig5_3_strategy_evolution.pdf'), ...
 fprintf('[图] %s\n', fullfile('image', 'fig5_3_strategy_evolution.png'));
 
 %% 5) (λ, β) 扫描: 验证压缩条件 κ=D_ν(θ)/(2λ)<1 的工程边界与 q_hat 网格
-% Route C 凹聚合下结构模数 D_ν 增大, 认证窗 (D_ν/2, ε_acc/ln|S|] 右移:
-%   0.10 → 收缩侧认证失败 (κ>1, 曲率代价); 0.15 → 窗口内; 0.20 → 默认工作点;
-%   0.30 → 收缩认证成立但偏差预算临界 (λ·ln|S| ≈ ε_acc)
+% 精确裁剪模量 D_ν=0.354 给出认证窗 (0.177,0.216]:
+%   0.10/0.15 → 收缩侧认证失败; 0.20 → 全局认证点;
+%   0.30 → 收缩认证成立但熵偏差超出 ε_acc。
 lambda_list = [0.10, 0.15, 0.20, 0.30];
 beta_list   = [0.10, 0.30, 0.50];
 q_hat_LB    = NaN(length(beta_list), length(lambda_list));
@@ -427,10 +433,12 @@ T_lw = cell2table(T_lw_rows, 'VariableNames', ...
      'BiasBound','BiasWithinBudget','q_hat','InCertifiedWindow'});
 writetable(T_lw, fullfile(tbl_dir, 'table5_1c_lambda_window.csv'));
 fprintf('[表] %s\n', fullfile('table', 'table5_1c_lambda_window.csv'));
-fprintf(['[结论] λ=%.2f 在认证窗口外 (κ=%.2f>1) 的实测 q_hat=%.3f; ' ...
-    'λ=%.2f 收缩认证成立但偏差预算 %.3f 超出 ε_acc=%.2f\n'], ...
-    lambda_list(1), D_proposed/(2*lambda_list(1)), q_hat_LB(beta_row, 1), ...
-    lambda_list(end), lambda_list(end)*bias_coef, eps_acc);
+cert_idx = find(abs(lambda_list - 0.20) < 1e-12, 1);
+fprintf(['[结论] λ=%.2f 为性能点但在全局认证窗外 (κ=%.2f>1, q_hat=%.3f); ' ...
+    'λ=%.2f 在窗内 (q_th=%.3f, q_hat=%.3f)\n'], ...
+    lambda_default, D_proposed/(2*lambda_default), ...
+    q_hat_LB(beta_row, find(abs(lambda_list-lambda_default)<1e-12,1)), ...
+    lambda_list(cert_idx), q_th_LB(beta_row, cert_idx), q_hat_LB(beta_row, cert_idx));
 
 %% 6) 表5-1: N × Method 笛卡尔积, 含 q_hat / q_th / D_theta
 fprintf('\n===== 表5-1 W-FBRI 收敛性能与几何压缩率对比 =====\n');
@@ -558,19 +566,24 @@ fprintf('  [表] %s\n', fullfile('table', 'table5_1b_greedy_fragility.csv'));
 %% 8) 预期结论自动验证
 fprintf('\n===== 预期结论自动验证 =====\n');
 
-% (i) 定理 2 + 命题 1: q_th<1 (条件成立) 且 q_hat <= q_th (上界覆盖实测)
+% (i) 精确证书: Fixed 在 λ=0.15 认证；Proposed 的 λ=0.15 仅经验收敛，
+%     λ=0.20 满足 q_hat <= q_th < 1。
 q_hat_fixed = q_hat_grid(default_N_idx, 2);
 q_hat_prop  = q_hat_grid(default_N_idx, 3);
 fprintf('(i) 几何收敛率核验 (N=%d):\n', N_plot);
 fprintf('    Fixed:    q_hat = %.3f <= q_th = %.3f < 1  %s\n', ...
     q_hat_fixed, q_th_list(2), ...
     pass_label(q_hat_fixed <= q_th_list(2) && q_th_list(2) < 1));
-fprintf('    Proposed: q_hat = %.3f <= q_th = %.3f < 1  %s\n', ...
-    q_hat_prop, q_th_list(3), ...
-    pass_label(q_hat_prop <= q_th_list(3) && q_th_list(3) < 1));
-fprintf('    [说明] q_th 由命题 1 结构化模量 D(θ) 闭式给出 (κ=D/(2λ)),\n');
-fprintf('           默认工作点 λ=%.2f 满足收缩条件; λ<D/2=%.4f 区域超出认证范围\n', ...
-    lambda_default, D_proposed/2);
+fprintf('    Proposed performance (λ=%.2f): q_hat=%.3f, q_th=%.3f >= 1 (empirical) %s\n', ...
+    lambda_default, q_hat_prop, q_th_list(3), ...
+    pass_label(q_hat_prop < 1 && q_th_list(3) >= 1));
+fprintf('    Proposed certified   (λ=%.2f): q_hat=%.3f <= q_th=%.3f < 1 %s\n', ...
+    lambda_list(cert_idx), q_hat_LB(beta_row, cert_idx), ...
+    q_th_LB(beta_row, cert_idx), ...
+    pass_label(q_hat_LB(beta_row, cert_idx) <= q_th_LB(beta_row, cert_idx) ...
+    && q_th_LB(beta_row, cert_idx) < 1));
+fprintf('    [说明] 精确裁剪模量 D=%.3f 给出 λ>D/2=%.4f。\n', ...
+    D_proposed, D_proposed/2);
 
 % (ii) Greedy 收敛轮数 <= 3
 gr_iter = results{1}.iterations;

@@ -41,39 +41,49 @@ fprintf('配置: N=%d, δ=%.2f, α=%.1f, λ=%.2f, β=%.1f, bell FOU\n\n', ...
 
 %% 2) 求解链 1: Proposed (Lemma 1 闭式 type-reduction)
 fprintf('--- [1/4] Proposed (closed-form, Lemma 1) ---\n');
-t0 = tic;
 [pi_prop, hist_prop] = sec5_1_alpha_robust_solve(params, delta, theta, alpha);
-t_prop = toc(t0);
-fprintf('  收敛轮数 R=%d, 用时 %.3f s\n', hist_prop.iterations, t_prop);
+fprintf('  收敛轮数 R=%d\n', hist_prop.iterations);
 
 %% 3) 求解链 2/3: KM / EKM 迭代式 type-reduction
 fprintf('--- [2/4] KM-iterative type-reduction (Karnik–Mendel 2001) ---\n');
-t0 = tic;
 [pi_km, hist_km, km_stats] = solve_with_km(params, delta, theta, alpha, km_grid, false);
-t_km = toc(t0);
-fprintf('  收敛轮数 R=%d, 用时 %.3f s, KM 平均切换点迭代 %.1f 轮/次\n', ...
-    hist_km.iterations, t_km, km_stats.mean_inner_iter);
+fprintf('  收敛轮数 R=%d, KM 平均切换点迭代 %.1f 轮/次\n', ...
+    hist_km.iterations, km_stats.mean_inner_iter);
 
 fprintf('--- [3/4] EKM-iterative type-reduction (Wu–Mendel) ---\n');
-t0 = tic;
 [pi_ekm, hist_ekm, ekm_stats] = solve_with_km(params, delta, theta, alpha, km_grid, true);
-t_ekm = toc(t0);
-fprintf('  收敛轮数 R=%d, 用时 %.3f s, EKM 平均切换点迭代 %.1f 轮/次\n', ...
-    hist_ekm.iterations, t_ekm, ekm_stats.mean_inner_iter);
+fprintf('  收敛轮数 R=%d, EKM 平均切换点迭代 %.1f 轮/次\n', ...
+    hist_ekm.iterations, ekm_stats.mean_inner_iter);
 
 %% 4) 求解链 4: Type-1 独立求解链 (δ=0 名义收益)
 fprintf('--- [4/4] Type-1 chain (no FOU, nominal payoff) ---\n');
-t0 = tic;
 [pi_t1, hist_t1] = sec4_3_1_wfbri_solve(params, 0, theta);
-t_t1 = toc(t0);
-fprintf('  收敛轮数 R=%d, 用时 %.3f s\n', hist_t1.iterations, t_t1);
+fprintf('  收敛轮数 R=%d\n', hist_t1.iterations);
+
+% 上述首次求解作为预热；各链按相同顺序重复 10 次，报告求解时间中位数。
+timing_repeats = 10;
+solve_times = zeros(timing_repeats, 4);
+for timing_run = 1:timing_repeats
+    t0 = tic;
+    sec5_1_alpha_robust_solve(params, delta, theta, alpha);
+    solve_times(timing_run, 1) = toc(t0);
+    t0 = tic;
+    solve_with_km(params, delta, theta, alpha, km_grid, false);
+    solve_times(timing_run, 2) = toc(t0);
+    t0 = tic;
+    solve_with_km(params, delta, theta, alpha, km_grid, true);
+    solve_times(timing_run, 3) = toc(t0);
+    t0 = tic;
+    sec4_3_1_wfbri_solve(params, 0, theta);
+    solve_times(timing_run, 4) = toc(t0);
+end
+runtimes = median(solve_times, 1);
 
 %% 5) 统一指标评估
 methods  = {'Proposed (closed-form)', 'KM-iterative', 'EKM-iterative', 'Type-1 chain'};
 pis      = {pi_prop, pi_km, pi_ekm, pi_t1};
 iters    = [hist_prop.iterations, hist_km.iterations, ...
             hist_ekm.iterations, hist_t1.iterations];
-runtimes = [t_prop, t_km, t_ekm, t_t1];
 deltas_solve = [delta, delta, delta, 0];   % Type-1 链按 δ=0 评估 (同实验二口径)
 
 n_m = numel(methods);
@@ -127,9 +137,9 @@ fprintf('%s (i) KM/EKM 均衡与闭式 Proposed 逐位一致: %.2e / %.2e (<1e-9
 chk2 = km_err < 1e-9;
 fprintf('%s (ii) KM type-reduced 区间 = 闭式端点 (Lemma 1): 偏差 %.2e\n', ...
     pass_label(chk2), km_err);
-chk3 = t_km > t_prop && t_ekm > t_prop;
+chk3 = all(runtimes(2:3) > runtimes(1));
 fprintf('%s (iii) 迭代式 KM/EKM 开销高于闭式: ×%.1f / ×%.1f\n', ...
-    pass_label(chk3), t_km / t_prop, t_ekm / t_prop);
+    pass_label(chk3), runtimes(2) / runtimes(1), runtimes(3) / runtimes(1));
 chk4 = margin(4) == 0 && WC_q5(4) < WC_q5(1);
 fprintf('%s (iv) Type-1 链零安全垫且最差扰动收益劣于 Proposed: WC %.4f < %.4f\n', ...
     pass_label(chk4), WC_q5(4), WC_q5(1));

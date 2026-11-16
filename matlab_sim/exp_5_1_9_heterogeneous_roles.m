@@ -1,8 +1,8 @@
 %% exp_5_1_9_heterogeneous_roles.m
 % 异构角色变体 (审稿意见 MC4): 行使论文 §3.1 的 V/R/E 角色划分与受限
-% 策略集 S_i ⊆ S, 在认证域内 (alpha=0.5, s=0, lambda=0.15 单温) 验证:
-%   (1) W-FBRI 在受限单纯形积上收敛, q_hat < q_th (定理 1 证书不变,
-%       因为可行子集上的跨策略 variation 不超过全集模量);
+% 策略集 S_i ⊆ S, 在 alpha=0.5, s=0, lambda=0.15 性能点验证:
+%   (1) W-FBRI 在受限单纯形积上经验收敛；全局模量同时披露，但
+%       lambda=0.15 不携带全局收缩标签;
 %   (2) 多种群复制动态 (Prop 3) 在受限单纯形积上收敛到局部稳定静止点,
 %       以乘积切空间最大对称特征值 / 顶点入侵边距判定分支;
 %   (3) 掩码外坐标严格为零, 事后 exploitability 证书有限。
@@ -29,7 +29,7 @@ mask(idx_V, feas_V) = true;
 mask(idx_R, feas_R) = true;
 mask(idx_E, feas_E) = true;
 
-D_nu = 0.218;
+[D_nu, ~] = sec4_3_1_kernel_variation_modulus(params, theta, delta);
 q_th = (1 - params.beta) + params.beta * D_nu / (2 * params.lambda);
 
 %% ---- W-FBRI: 同质参照 vs 异构受限 ----
@@ -138,7 +138,8 @@ fprintf('\n[TABLE] table/table5_9_heterogeneous_roles.csv\n');
 %% ---- 预期结论自动验证 ----
 fprintf('\n===== Checks =====\n');
 check('Het W-FBRI converged', hist_het.converged);
-check('q_hat_het < q_th', q_hat_het < q_th);
+check('lambda=0.15 is empirical: q_hat<1 and q_th>=1', ...
+    q_hat_het < 1 && q_th >= 1);
 check('masked entries exactly zero', ...
     all(pi_het(~mask) == 0));
 check('eps_NE within entropy bound lambda*ln4', ...

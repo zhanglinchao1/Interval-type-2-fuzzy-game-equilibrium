@@ -50,7 +50,38 @@
 #include <map>
 #include "json.hpp"
 
+#include <cstdlib>
+#include <iomanip>
+
 using namespace veins;
+
+namespace {
+// Diagnostics only: enabled explicitly for the R3-5 validation runs.
+void r3q5Trace(const char* event, const std::string& node, double time,
+               long tree, double generated, int index,
+               const veins::chapter52::Vec4& pi,
+               const veins::chapter52::Vec4& x,
+               const veins::chapter52::Vec3& theta,
+               const std::vector<double>& omega = {}) {
+    const char* path = std::getenv("R3Q5_TRACE");
+    if (!path || !*path) return;
+    static std::ofstream out(path);
+    if (!out) throw cRuntimeError("Cannot write R3Q5 trace");
+    static bool header = false;
+    if (!header) {
+        out << "event,node,time,tree,generated,index,p0,p1,p2,p3,x0,x1,x2,x3,t0,t1,t2,w0,w1,w2,w3,w4\n";
+        out << std::setprecision(17);
+        header = true;
+    }
+    out << event << ',' << node << ',' << time << ',' << tree << ',' << generated << ',' << index;
+    for (auto v : pi) out << ',' << v;
+    for (auto v : x) out << ',' << v;
+    for (auto v : theta) out << ',' << v;
+    for (int j = 0; j < 5; ++j) out << ',' << (omega.empty() ? -1.0 : omega[j]);
+    out << '\n';
+}
+} // namespace
+
 
 // OMNeT++模块注册宏 - 这是必需的
 Define_Module(veins::FuzzyTrustApp);
@@ -380,6 +411,8 @@ void FuzzyTrustApp::initialize(int stage)
                     }
                 }
                 // M2 接入：MembershipExtractor 与 itGameEngine 同生命周期
+                r3q5Trace("init", getParentModule()->getFullPath(), simTime().dbl(),
+                    -1, 0, lastGovernanceIndex, itGameEngine->getPi(), cachedXBarLocal, cachedTheta);
                 membershipExtractor = std::make_unique<veins::chapter52::MembershipExtractor>();
                 // M3 接入：MetricsLogger（按 plan §2.4）；finish 时 flush 到
                 // results/chapter52/<config>/<node>/metrics.csv
@@ -579,6 +612,8 @@ void FuzzyTrustApp::initialize(int stage)
 }
 
 void FuzzyTrustApp::finish() {
+    if (itGameEngine) r3q5Trace("finish", getParentModule()->getFullPath(), simTime().dbl(),
+        -1, 0, lastGovernanceIndex, itGameEngine->getPi(), cachedXBarLocal, cachedTheta);
     // M4 接入：清理 governanceTimer（仅 RSU schedule 过）
     if (governanceTimer) {
         cancelAndDelete(governanceTimer);
@@ -865,6 +900,8 @@ void FuzzyTrustApp::onWSM(BaseFrame1609_4* wsm)
         if (isRSU && rsuGovernance) {
             veins::chapter52::Vec4 pi_vehicle;
             for (int j = 0; j < 4; ++j) pi_vehicle[j] = srm->getPi(j);
+            r3q5Trace("recv_report", getParentModule()->getFullPath(), simTime().dbl(),
+                srm->getTreeId(), srm->getTimestamp().dbl(), -1, pi_vehicle, cachedXBarLocal, cachedTheta);
             rsuGovernance->accumulateEvidence(pi_vehicle);
         }
         return;  // 上报消息不进入通用信誉解析路径
@@ -882,6 +919,9 @@ void FuzzyTrustApp::onWSM(BaseFrame1609_4* wsm)
             cachedTheta = {gwm->getTheta(0), gwm->getTheta(1), gwm->getTheta(2)};
             for (int j = 0; j < 4; ++j) cachedXBarLocal[j] = gwm->getXBarLocal(j);
             lastGovernanceIndex = incoming_h;
+            r3q5Trace("accept_gov", getParentModule()->getFullPath(), simTime().dbl(),
+                gwm->getTreeId(), gwm->getTimestamp().dbl(), incoming_h,
+                itGameEngine ? itGameEngine->getPi() : veins::chapter52::Vec4{}, cachedXBarLocal, cachedTheta);
             if (itGameEngine) {
                 itGameEngine->setParams(
                     par("itGame_lambda").doubleValue(),
@@ -1068,6 +1108,9 @@ void FuzzyTrustApp::handleSelfMsg(cMessage* msg) {
         // MC4 闭环后：x̄ 证据全部来自 StrategyReportMessage（onWSM 中 accumulateEvidence）。
         // 本周期无车辆上报时 aggregator 保持上次 x̄（slowUpdate 内部 n_evidence>0 才更新）。
         // 不再把 RSU 自身 π 喂入 —— RSU 受限策略集 {SC,SP} 的掩码偏差不得进入群体平均场。
+        r3q5Trace("gov_before", getParentModule()->getFullPath(), simTime().dbl(),
+            -1, 0, static_cast<int>(rsuGovernance->evidenceCount()),
+            itGameEngine->getPi(), cachedXBarLocal, cachedTheta, rsuGovernance->getOmega());
         rsuGovernance->slowUpdate();
         cachedTheta = rsuGovernance->getTheta();
         cachedXBarLocal = rsuGovernance->getXBarLocal();
@@ -1090,6 +1133,9 @@ void FuzzyTrustApp::handleSelfMsg(cMessage* msg) {
         for (int j = 0; j < 4; ++j) gwm->setXBarLocal(j, cachedXBarLocal[j]);
         gwm->setOmegaIndex(lastGovernanceIndex);
         if (metricsLogger) metricsLogger->recordWSMSent(simTime().dbl());
+        r3q5Trace("broadcast", getParentModule()->getFullPath(), simTime().dbl(),
+            gwm->getTreeId(), gwm->getTimestamp().dbl(), lastGovernanceIndex,
+            itGameEngine->getPi(), cachedXBarLocal, cachedTheta, rsuGovernance->getOmega());
         sendDown(gwm);
 
         EV << "FuzzyTrustApp[RSU-Gov]: slowUpdate h=" << lastGovernanceIndex
@@ -1368,7 +1414,11 @@ void FuzzyTrustApp::updateGameDecision(double trustMembership, double delayMembe
         }
         // M4 已接入：x_bar 来自 RSU 广播缓存（cachedXBarLocal）。RSU 自身用 ITGameEngine 的 π 代理。
         // 车辆若尚未收到广播则使用默认均匀，跟过去行为兼容。
+        r3q5Trace("decision_before", getParentModule()->getFullPath(), simTime().dbl(),
+            -1, 0, lastGovernanceIndex, itGameEngine->getPi(), cachedXBarLocal, cachedTheta);
         veins::chapter52::Vec4 pi_new = itGameEngine->step(mu_nominal, cachedXBarLocal);
+        r3q5Trace("decision_after", getParentModule()->getFullPath(), simTime().dbl(),
+            -1, 0, lastGovernanceIndex, pi_new, cachedXBarLocal, cachedTheta);
         int action = itGameEngine->sampleAction();
         static const std::vector<std::string> strategies = {"SC", "SP", "DC", "DP"};
         std::string selectedStrategy = (action >= 0 && action < 4) ? strategies[action] : "UNKNOWN";
@@ -1409,6 +1459,8 @@ void FuzzyTrustApp::updateGameDecision(double trustMembership, double delayMembe
             srm->setTimestamp(simTime());
             for (int j = 0; j < 4; ++j) srm->setPi(j, pi_new[j]);
             if (metricsLogger) metricsLogger->recordWSMSent(simTime().dbl());
+            r3q5Trace("send_report", getParentModule()->getFullPath(), simTime().dbl(),
+                srm->getTreeId(), srm->getTimestamp().dbl(), -1, pi_new, cachedXBarLocal, cachedTheta);
             sendDown(srm);
         }
 

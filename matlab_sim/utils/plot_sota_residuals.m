@@ -6,8 +6,9 @@ function plot_sota_residuals(trace_for_plot, img_dir, output_suffix)
     fields = fieldnames(trace_for_plot);
     if isempty(fields); return; end
     fig = figure('Name', 'Algorithm-level SOTA convergence', ...
-        'Position', [100, 100, 620, 400]);
+        'Position', [100, 100, 520, 390]);
     hold on;
+    markers = {'o', '^', 's', 'd', 'v', '>'};
     for i = 1:numel(fields)
         tr = trace_for_plot.(fields{i});
         r = 1:numel(tr.residual);
@@ -18,6 +19,8 @@ function plot_sota_residuals(trace_for_plot, img_dir, output_suffix)
         end
         plot(r, tr.residual, 'LineWidth', line_width, ...
             'Color', color, 'LineStyle', line_style, ...
+            'Marker', markers{i}, 'MarkerSize', 5, ...
+            'MarkerIndices', i:max(6, floor(numel(r)/10)):numel(r), ...
             'DisplayName', tr.method);
     end
     % 停止阈值参考线 (eps_tol=1e-4): 为 "reach threshold" 提供视觉锚点,
@@ -32,7 +35,8 @@ function plot_sota_residuals(trace_for_plot, img_dir, output_suffix)
     set(gca, 'YScale', 'log');
     xlabel('Iteration r', 'FontSize', 12);
     ylabel('Strategy residual', 'FontSize', 12);
-    legend('Location', 'northeast', 'FontSize', 11, 'Box', 'on');
+    lgd = legend('Location', 'southoutside', 'NumColumns', 2, ...
+        'FontSize', 12, 'Box', 'on');
     grid on;
     ax = gca;
     if isprop(ax, 'Toolbar') && ~isempty(ax.Toolbar)
@@ -40,6 +44,10 @@ function plot_sota_residuals(trace_for_plot, img_dir, output_suffix)
     end
     % 统一字体规范 (Times New Roman / 字号), 与其它 Fig.5 系列图保持一致
     apply_fig5_publication_style(fig);
+    set(findall(fig, '-property', 'FontSize'), 'FontSize', 14);
+    lgd.FontSize = 12;
+    set(ax, 'YMinorGrid', 'off', 'XMinorGrid', 'off', 'GridAlpha', 0.15, ...
+        'YTick', 10.^(-5:0));
     exportgraphics(fig, fullfile(img_dir, ...
         ['fig5_16_sota_convergence' output_suffix '.pdf']), ...
         'ContentType', 'vector', 'BackgroundColor', 'white');

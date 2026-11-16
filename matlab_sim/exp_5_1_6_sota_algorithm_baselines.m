@@ -67,9 +67,8 @@ end
 %                严格 NE (边距 +0.021), 深退火固定点=纯 SP;
 %   v2 分散冲击: (α=0.05, s=0) — 暴露分散时全面 worst-case 罚, 纯 DC 为严格
 %                NE (边距 +0.012), 深退火固定点=纯 DC。
-% 基线各自的风险旋钮在同一协议下的选优对照见 frontier 表 (table5_6i/6j),
-% 结论不因基线选优而改变。benign 核收敛面与该工作点无关, 沿用
-% (alpha_true, proposed_focus_s) 单段认证温度。
+% 基线各自的风险旋钮在同一协议下的选优对照见 frontier 表 (table5_6i/6j)。
+% benign 核收敛面与 Scenario-B 性能点分开报告。
 if strcmp(scenario_mode, 'dispersed')
     scenB_proposed_alpha   = 0.05;
     scenB_proposed_focus_s = 0;
@@ -84,8 +83,8 @@ params_base.R_max = 300;
 params_base.eps_tol = 1e-4;
 % FOU 自适应悲观聚焦指数 s (论文 §4.2 (α,s) 二维悲观族): Proposed 主工作点。
 % 固定的强聚焦低 α 工作点 (α=0.05, s=20)。Scenario-B 性能工作点采用
-% 认证退火调度 (见 proposed_tail_profile / sec4_3_1_wfbri_solve):
-% 首段 λ0=0.15 在认证压缩窗内, 随后温度衰减并热启动, 终点报告事后
+% 声明退火调度 (见 proposed_tail_profile / sec4_3_1_wfbri_solve):
+% 终点报告事后
 % exploitability 证书 eps_ne (Lemma 1 对任意 eps0-NE 成立, 证书链保留)。
 % 两场景共用该工作点且关闭 tail-CVaR 校准；结果按 mean-tail tradeoff 报告。
 params_base.proposed_focus_s = 20;
@@ -753,8 +752,8 @@ function p = proposed_tail_profile(p, alpha_fallback)
     end
     % 合法工作点 (纯 Γ_{α,s} 族; α/s 由调用方按声明的 regime 工作点或扫描网格
     % 传入, 本函数只负责统一的退火调度与关闭校准项):
-    %   - lambda_path: 认证深退火调度 [0.15 0.002] (声明式, 两场景一致)。
-    %     首段 λ0=0.15 在认证压缩窗内 (先验证书照旧); 终段 λ_T=0.002 ≪ ν 边距
+    %   - lambda_path: 声明式调度 [0.15 0.002] (两场景一致)。
+    %     该 focused 工作点不在先验压缩区间; 终段 λ_T=0.002 ≪ ν 边距
     %     (~0.02/0.012) 把固定点贴到 ν 准则的严格 NE 顶点, 终点由 history.eps_ne
     %     事后 exploitability 证书度量, 直接代入 Lemma 1 / Corollary 2 的
     %     epsilon_0 (对任意 eps0-NE 成立)。两段即充分: SP/DC 是全剖面严格
